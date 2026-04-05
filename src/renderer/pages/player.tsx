@@ -194,7 +194,7 @@ function PlaybackControls({
       {clip && (
         <button
           onClick={onClearClip}
-          className="shrink-0 rounded-full bg-primary/20 px-2 py-0.5 text-[9px] text-primary hover:bg-primary/30"
+          className="shrink-0 rounded-full bg-primary px-2.5 py-0.5 text-[10px] font-medium text-primary-foreground hover:bg-primary/80"
         >
           ✕ 片段
         </button>
