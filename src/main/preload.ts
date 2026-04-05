@@ -20,6 +20,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('ffmpeg:progress', listener);
   },
 
+  // Analyzer
+  analyzeProject: (projectId: string) => ipcRenderer.invoke('analyzer:analyze', projectId),
+  getAnalysisData: (projectId: string) => ipcRenderer.invoke('analyzer:getData', projectId),
+  onAnalyzerStatus: (callback: (projectId: string, status: string) => void) => {
+    const listener = (_event: any, projectId: string, status: string) => callback(projectId, status);
+    ipcRenderer.on('analyzer:status', listener);
+    return () => ipcRenderer.removeListener('analyzer:status', listener);
+  },
+
   // Whisper / Groq
   getBackendSettings: () => ipcRenderer.invoke('whisper:getBackendSettings'),
   setGroqApiKey: (key: string) => ipcRenderer.invoke('whisper:setGroqApiKey', key),

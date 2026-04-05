@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from "react"
-import { ArrowLeft, Maximize, Minimize, Pause, Play } from "lucide-react"
+import { ArrowLeft, Maximize, Minimize, Pause, Play, Loader2, Sparkles, ListVideo, Scissors } from "lucide-react"
 import { Button } from "@/renderer/components/ui/button"
+import type { AnalysisData } from "@/main/store"
 
 // ── SRT parsing ──────────────────────────────────────────────
 
@@ -245,16 +246,49 @@ export function PlayerPage({ projectId, filePath, fileName, onBack }: PlayerPage
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [showControls, setShowControls] = useState(true)
 
+  // Analysis state
+  const [analysis, setAnalysis] = useState<AnalysisData | null>(null)
+  const [analyzing, setAnalyzing] = useState(false)
+  const [analysisError, setAnalysisError] = useState<string | null>(null)
+  const [analysisTab, setAnalysisTab] = useState<"sections" | "clips">("sections")
+  const [showPanel, setShowPanel] = useState(false)
+
   const hideTimerRef = useRef<ReturnType<typeof setTimeout>>(null)
   const subtitlesRef = useRef<Subtitle[]>([])
   subtitlesRef.current = subtitles
   const handlersRef = useRef<ReturnType<typeof createVideoEventHandlers> | null>(null)
 
-  // Load SRT
+  // Load SRT + existing analysis
   useEffect(() => {
     window.electronAPI.readSrt(projectId).then((srt) => {
       if (srt) setSubtitles(parseSrt(srt))
     })
+    window.electronAPI.getAnalysisData(projectId).then((data) => {
+      if (data) {
+        setAnalysis(data)
+        setShowPanel(true)
+      }
+    })
+  }, [projectId])
+
+  const handleAnalyze = useCallback(async () => {
+    setAnalyzing(true)
+    setAnalysisError(null)
+    try {
+      const result = await window.electronAPI.analyzeProject(projectId)
+      if (result.success && result.data) {
+        setAnalysis(result.data)
+        setShowPanel(true)
+      } else {
+        console.error("[analyzer] failed:", result.error)
+        setAnalysisError(result.error ?? "Unknown error")
+      }
+    } catch (err) {
+      console.error("[analyzer] exception:", err)
+      setAnalysisError(String(err))
+    } finally {
+      setAnalyzing(false)
+    }
   }, [projectId])
 
   // Subtitle update (driven by onTimeUpdate callback)
@@ -380,6 +414,23 @@ export function PlayerPage({ projectId, filePath, fileName, onBack }: PlayerPage
     return `file:///${encoded}`
   })()
 
+  const seekToMs = useCallback((ms: number) => {
+    const video = videoRef.current
+    if (!video) return
+    video.currentTime = ms / 1000
+  }, [])
+
+  const formatMs = (ms: number) => {
+    const s = Math.floor(ms / 1000)
+    const h = Math.floor(s / 3600)
+    const m = Math.floor((s % 3600) / 60)
+    const sec = s % 60
+    if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`
+    return `${m}:${String(sec).padStart(2, "0")}`
+  }
+
+  const currentMs = currentTime * 1000
+
   return (
     <div className="flex h-full flex-1 flex-col overflow-hidden bg-background">
       {!isFullscreen && (
@@ -387,59 +438,154 @@ export function PlayerPage({ projectId, filePath, fileName, onBack }: PlayerPage
           <Button variant="ghost" size="icon" className="size-8" onClick={onBack}>
             <ArrowLeft className="size-4" />
           </Button>
-          <span className="truncate text-sm font-medium">{fileName}</span>
+          <span className="flex-1 truncate text-sm font-medium">{fileName}</span>
+          {analysis && (
+            <Button variant="ghost" size="sm" onClick={() => setShowPanel(!showPanel)}>
+              <ListVideo className="mr-1 size-4" />
+              大綱
+            </Button>
+          )}
+          {!analysis && !analyzing && (
+            <Button variant="outline" size="sm" onClick={handleAnalyze}>
+              <Sparkles className="mr-1 size-4" />
+              分析大綱
+            </Button>
+          )}
+          {analyzing && (
+            <Button variant="outline" size="sm" disabled>
+              <Loader2 className="mr-1 size-4 animate-spin" />
+              分析中...
+            </Button>
+          )}
+          {analysisError && (
+            <span className="text-xs text-destructive truncate max-w-60" title={analysisError}>
+              {analysisError}
+            </span>
+          )}
         </div>
       )}
 
-      <div
-        ref={containerRef}
-        className="relative flex min-h-0 flex-1 cursor-pointer items-center justify-center overflow-hidden bg-black"
-        onMouseMove={resetHideTimer}
-        onClick={(e) => {
-          if ((e.target as HTMLElement).closest("[data-controls]")) return
-          togglePlayPause()
-          resetHideTimer()
-        }}
-      >
-        <video
-          ref={videoRef}
-          src={videoSrc}
-          className="size-full object-contain"
-          preload="metadata"
-          playsInline
-          onLoadedMetadata={handleLoadedMetadata}
-          onDurationChange={(e) => setDuration(e.currentTarget.duration)}
-          onError={() => console.error("Failed to load video")}
-        />
+      <div className="flex min-h-0 flex-1">
+        {/* Video area */}
+        <div
+          ref={containerRef}
+          className="relative flex min-h-0 flex-1 cursor-pointer items-center justify-center overflow-hidden bg-black"
+          onMouseMove={resetHideTimer}
+          onClick={(e) => {
+            if ((e.target as HTMLElement).closest("[data-controls]")) return
+            togglePlayPause()
+            resetHideTimer()
+          }}
+        >
+          <video
+            ref={videoRef}
+            src={videoSrc}
+            className="size-full object-contain"
+            preload="metadata"
+            playsInline
+            onLoadedMetadata={handleLoadedMetadata}
+            onDurationChange={(e) => setDuration(e.currentTarget.duration)}
+            onError={() => console.error("Failed to load video")}
+          />
 
-        {currentText && (
-          <div className="pointer-events-none absolute bottom-20 left-0 right-0 text-center">
-            <span
-              className="inline-block rounded-md bg-black/80 px-4 py-2 text-xl font-medium leading-relaxed text-white"
-              style={{ textShadow: "0 2px 8px rgba(0,0,0,0.9)" }}
-            >
-              {currentText}
-            </span>
+          {currentText && (
+            <div className="pointer-events-none absolute bottom-20 left-0 right-0 text-center">
+              <span
+                className="inline-block rounded-md bg-black/80 px-4 py-2 text-xl font-medium leading-relaxed text-white"
+                style={{ textShadow: "0 2px 8px rgba(0,0,0,0.9)" }}
+              >
+                {currentText}
+              </span>
+            </div>
+          )}
+
+          <div
+            data-controls
+            className={`absolute bottom-4 left-4 right-4 transition-opacity duration-300 ${
+              showControls ? "opacity-100" : "pointer-events-none opacity-0"
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <PlaybackControls
+              isPlaying={isPlaying}
+              currentTime={currentTime}
+              duration={duration}
+              isFullscreen={isFullscreen}
+              onTogglePlayPause={togglePlayPause}
+              onSeek={handleSeek}
+              onToggleFullscreen={toggleFullscreen}
+            />
+          </div>
+        </div>
+
+        {/* Analysis panel */}
+        {showPanel && analysis && !isFullscreen && (
+          <div className="flex w-80 shrink-0 flex-col border-l bg-background">
+            <div className="flex border-b">
+              <button
+                className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+                  analysisTab === "sections"
+                    ? "border-b-2 border-primary text-primary"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+                onClick={() => setAnalysisTab("sections")}
+              >
+                <ListVideo className="mr-1 inline size-3.5" />
+                段落 ({analysis.sections.length})
+              </button>
+              <button
+                className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+                  analysisTab === "clips"
+                    ? "border-b-2 border-primary text-primary"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+                onClick={() => setAnalysisTab("clips")}
+              >
+                <Scissors className="mr-1 inline size-3.5" />
+                剪輯建議 ({analysis.clips.length})
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              {analysisTab === "sections" && analysis.sections.map((sec, i) => {
+                const active = currentMs >= sec.startMs && currentMs < sec.endMs
+                return (
+                  <button
+                    key={i}
+                    className={`w-full border-b px-3 py-2.5 text-left transition-colors hover:bg-accent ${
+                      active ? "bg-accent/50 border-l-2 border-l-primary" : ""
+                    }`}
+                    onClick={() => seekToMs(sec.startMs)}
+                  >
+                    <div className="flex items-baseline gap-2">
+                      <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+                        {formatMs(sec.startMs)}
+                      </span>
+                      <span className="text-sm font-medium">{sec.title}</span>
+                    </div>
+                    <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{sec.summary}</p>
+                  </button>
+                )
+              })}
+
+              {analysisTab === "clips" && analysis.clips.map((clip, i) => (
+                <button
+                  key={i}
+                  className="w-full border-b px-3 py-2.5 text-left transition-colors hover:bg-accent"
+                  onClick={() => seekToMs(clip.startMs)}
+                >
+                  <div className="flex items-baseline gap-2">
+                    <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+                      {formatMs(clip.startMs)} – {formatMs(clip.endMs)}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-sm font-medium">{clip.title}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{clip.reason}</p>
+                </button>
+              ))}
+            </div>
           </div>
         )}
-
-        <div
-          data-controls
-          className={`absolute bottom-4 left-4 right-4 transition-opacity duration-300 ${
-            showControls ? "opacity-100" : "pointer-events-none opacity-0"
-          }`}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <PlaybackControls
-            isPlaying={isPlaying}
-            currentTime={currentTime}
-            duration={duration}
-            isFullscreen={isFullscreen}
-            onTogglePlayPause={togglePlayPause}
-            onSeek={handleSeek}
-            onToggleFullscreen={toggleFullscreen}
-          />
-        </div>
       </div>
     </div>
   )

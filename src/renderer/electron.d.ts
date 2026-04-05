@@ -1,4 +1,4 @@
-import type { StoredProject } from '../main/store';
+import type { StoredProject, AnalysisData } from '../main/store';
 
 interface ElectronAPI {
   // Store
@@ -13,6 +13,11 @@ interface ElectronAPI {
   // FFmpeg
   extractAudio: (projectId: string) => Promise<{ success: boolean; audioPath?: string; error?: string }>;
   onFfmpegProgress: (callback: (projectId: string, percent: number) => void) => () => void;
+
+  // Analyzer
+  analyzeProject: (projectId: string) => Promise<{ success: boolean; data?: AnalysisData; error?: string }>;
+  getAnalysisData: (projectId: string) => Promise<AnalysisData | null>;
+  onAnalyzerStatus: (callback: (projectId: string, status: string) => void) => () => void;
 
   // Whisper / Groq
   getBackendSettings: () => Promise<{ groqApiKey: string; groqModel: string }>;

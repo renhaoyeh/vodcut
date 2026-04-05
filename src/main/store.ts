@@ -9,6 +9,11 @@ export interface TranscriptionProgress {
   segIdx: number;
 }
 
+export interface AnalysisData {
+  sections: Array<{ title: string; startMs: number; endMs: number; summary: string }>;
+  clips: Array<{ title: string; startMs: number; endMs: number; reason: string }>;
+}
+
 export interface StoredProject {
   id: string;
   fileName: string;
@@ -18,6 +23,8 @@ export interface StoredProject {
   addedAt: string;
   status: 'imported' | 'converting' | 'completed';
   transcriptionProgress?: TranscriptionProgress;
+  analysisData?: AnalysisData;
+  analysisPath?: string;
 }
 
 export type GroqModel = 'whisper-large-v3' | 'whisper-large-v3-turbo';
