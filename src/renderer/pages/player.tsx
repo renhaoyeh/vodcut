@@ -213,7 +213,7 @@ function PlaybackControls({
             <Volume2 className="size-3.5" />
           )}
         </Button>
-        <div className="w-0 overflow-hidden transition-all duration-200 group-hover/vol:w-16">
+        <div className="flex h-7 w-0 items-center overflow-hidden transition-all duration-200 group-hover/vol:w-16">
           <input
             type="range"
             min="0"
