@@ -1,0 +1,51 @@
+{
+  "app": {
+    "name": "Vodcut"
+  },
+  "nav": {
+    "dashboard": "儀表板",
+    "projects": "專案",
+    "settings": "設定",
+    "main": "主選單"
+  },
+  "projects": {
+    "dropZone": "將影片檔案拖曳至此",
+    "supportedFormats": "支援 MP4、MOV、AVI、MKV、WebM",
+    "noVideos": "尚無影片",
+    "dragToStart": "將影片檔案拖曳至上方即可開始",
+    "delete": "刪除"
+  },
+  "settings": {
+    "title": "設定",
+    "description": "轉錄與分析服務的 API 金鑰。",
+    "transcriptionLabel": "Groq Whisper（轉錄）",
+    "transcriptionHelp": "每行一把 key，多把 key 會自動輪替以避免速率限制。至 <link>console.groq.com</link> 取得",
+    "groqLabel": "Groq LLM（分析）",
+    "groqHelp": "用於 LLM 分析。至 <link>console.groq.com</link> 取得金鑰",
+    "geminiLabel": "Gemini（分析）",
+    "geminiHelp": "用於 LLM 分析。至 <link>aistudio.google.com</link> 取得金鑰",
+    "save": "儲存",
+    "saved": "已儲存"
+  },
+  "player": {
+    "transcribe": "轉錄",
+    "retranscribe": "重新轉錄",
+    "resumeTranscribe": "繼續轉錄 ({{current}}/{{total}})",
+    "transcribeNoKey": "請先在設定中填入 Groq Whisper API Key",
+    "convertingAudio": "轉換音訊中...",
+    "recognizing": "辨識中...",
+    "resumeRecognizing": "繼續辨識 (已完成 {{current}}/{{total}})...",
+    "recognizingProgress": "辨識中 ({{current}}/{{total}})...",
+    "analyze": "分析大綱",
+    "reanalyze": "重新分析",
+    "analyzing": "分析中...",
+    "analyzingChunk": "分析中（第 {{current}}/{{total}} 段）",
+    "analyzeNoSrt": "請先轉錄",
+    "noKey": "（無金鑰）",
+    "tabSubtitles": "字幕 ({{count}})",
+    "tabSections": "段落 ({{count}})",
+    "tabClips": "剪輯建議 ({{count}})",
+    "playingClickToCancel": "播放中 · 點擊取消",
+    "clearClip": "✕ 片段"
+  }
+}

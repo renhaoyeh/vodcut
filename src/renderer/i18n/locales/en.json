@@ -1,0 +1,51 @@
+{
+  "app": {
+    "name": "Vodcut"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "projects": "Projects",
+    "settings": "Settings",
+    "main": "Main"
+  },
+  "projects": {
+    "dropZone": "Drop video files here",
+    "supportedFormats": "Supports MP4, MOV, AVI, MKV, WebM",
+    "noVideos": "No videos yet",
+    "dragToStart": "Drag and drop video files above to get started",
+    "delete": "Delete"
+  },
+  "settings": {
+    "title": "Settings",
+    "description": "API keys for transcription and analysis services.",
+    "transcriptionLabel": "Groq Whisper (Transcription)",
+    "transcriptionHelp": "One key per line. Multiple keys rotate automatically to avoid rate limits. Get yours at <link>console.groq.com</link>",
+    "groqLabel": "Groq LLM (Analysis)",
+    "groqHelp": "For LLM analysis. Get your key at <link>console.groq.com</link>",
+    "geminiLabel": "Gemini (Analysis)",
+    "geminiHelp": "For LLM analysis. Get your key at <link>aistudio.google.com</link>",
+    "save": "Save",
+    "saved": "Saved"
+  },
+  "player": {
+    "transcribe": "Transcribe",
+    "retranscribe": "Re-transcribe",
+    "resumeTranscribe": "Resume ({{current}}/{{total}})",
+    "transcribeNoKey": "Please set Groq Whisper API Key in Settings first",
+    "convertingAudio": "Converting audio...",
+    "recognizing": "Recognizing...",
+    "resumeRecognizing": "Resuming recognition ({{current}}/{{total}} done)...",
+    "recognizingProgress": "Recognizing ({{current}}/{{total}})...",
+    "analyze": "Analyze outline",
+    "reanalyze": "Re-analyze",
+    "analyzing": "Analyzing...",
+    "analyzingChunk": "Analyzing (chunk {{current}}/{{total}})",
+    "analyzeNoSrt": "Please transcribe first",
+    "noKey": " (no key)",
+    "tabSubtitles": "Subtitles ({{count}})",
+    "tabSections": "Sections ({{count}})",
+    "tabClips": "Clip suggestions ({{count}})",
+    "playingClickToCancel": "Playing · Click to cancel",
+    "clearClip": "✕ Clip"
+  }
+}
