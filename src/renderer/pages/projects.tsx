@@ -3,9 +3,9 @@ import {
   FileVideo,
   Upload,
   Trash2,
+  FileText,
 } from "lucide-react"
 
-import { Badge } from "@/renderer/components/ui/badge"
 import {
   ContextMenu,
   ContextMenuContent,
@@ -75,18 +75,6 @@ export function ProjectsPage({
     [onAddProjects]
   )
 
-  const statusLabel = {
-    imported: "Imported",
-    converting: "Converting...",
-    completed: "Completed",
-  } as const
-
-  const statusVariant = {
-    imported: "secondary",
-    converting: "default",
-    completed: "outline",
-  } as const
-
   return (
     <div className="flex flex-1 flex-col gap-4 p-4">
       {/* Drop Zone */}
@@ -137,9 +125,9 @@ export function ProjectsPage({
                         {project.filePath}
                       </p>
                     </div>
-                    <Badge variant={statusVariant[project.status]}>
-                      {statusLabel[project.status]}
-                    </Badge>
+                    {project.srtPath && (
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground"><FileText className="size-4" />SRT</span>
+                    )}
                   </div>
                 </ContextMenuTrigger>
                 <ContextMenuContent>

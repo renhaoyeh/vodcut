@@ -30,6 +30,7 @@ interface ElectronAPI {
   setGeminiApiKey: (key: string) => Promise<{ success: boolean }>;
   transcribe: (projectId: string, model: string) => Promise<{ success: boolean; srtPath?: string; error?: string }>;
   readSrt: (projectId: string) => Promise<string | null>;
+  saveSrt: (projectId: string, content: string) => Promise<{ success: boolean; error?: string }>;
   onWhisperProgress: (callback: (projectId: string, percent: number) => void) => () => void;
   onWhisperStage: (callback: (projectId: string, stage: string) => void) => () => void;
 }

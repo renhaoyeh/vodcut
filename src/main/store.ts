@@ -128,4 +128,15 @@ export function registerStoreHandlers(): void {
       return null;
     }
   });
+
+  ipcMain.handle('store:saveSrt', (_event, projectId: string, content: string) => {
+    const project = projectStore.get('projects').find((p) => p.id === projectId);
+    if (!project?.srtPath) return { success: false, error: 'No SRT path' };
+    try {
+      fs.writeFileSync(project.srtPath, content, 'utf8');
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: (e as Error).message };
+    }
+  });
 }

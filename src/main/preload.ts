@@ -36,6 +36,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setGeminiApiKey: (key: string) => ipcRenderer.invoke('settings:setGeminiApiKey', key),
   transcribe: (projectId: string, model: string) => ipcRenderer.invoke('whisper:transcribe', projectId, model),
   readSrt: (projectId: string) => ipcRenderer.invoke('store:readSrt', projectId),
+  saveSrt: (projectId: string, content: string) => ipcRenderer.invoke('store:saveSrt', projectId, content),
   onWhisperProgress: (callback: (projectId: string, percent: number) => void) => {
     const listener = (_event: any, projectId: string, percent: number) => callback(projectId, percent);
     ipcRenderer.on('whisper:progress', listener);

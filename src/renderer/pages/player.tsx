@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from "react"
-import { ArrowLeft, Maximize, Minimize, Pause, Play, Loader2, Sparkles, ListVideo, Scissors, Volume2, VolumeX, Mic } from "lucide-react"
+import { ArrowLeft, Maximize, Minimize, Pause, Play, Loader2, Sparkles, ListVideo, Scissors, Volume2, VolumeX, Mic, FileText } from "lucide-react"
 import { Button } from "@/renderer/components/ui/button"
 import { Separator } from "@/renderer/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/renderer/components/ui/select"
@@ -24,6 +24,20 @@ interface Subtitle {
   startMs: number
   endMs: number
   text: string
+}
+
+function formatSrtTimestamp(ms: number): string {
+  const h = Math.floor(ms / 3600000)
+  const m = Math.floor((ms % 3600000) / 60000)
+  const s = Math.floor((ms % 60000) / 1000)
+  const milli = ms % 1000
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")},${String(milli).padStart(3, "0")}`
+}
+
+function subtitlesToSrt(subs: Subtitle[]): string {
+  return subs
+    .map((s, i) => `${i + 1}\n${formatSrtTimestamp(s.startMs)} --> ${formatSrtTimestamp(s.endMs)}\n${s.text}\n`)
+    .join("\n")
 }
 
 function parseSrt(srt: string): Subtitle[] {
@@ -341,7 +355,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
   const [analyzing, setAnalyzing] = useState(false)
   const [analysisError, setAnalysisError] = useState<string | null>(null)
   const [analysisModelKey, setAnalysisModelKey] = useState("gemini:gemini-2.5-flash")
-  const [analysisTab, setAnalysisTab] = useState<"sections" | "clips">("sections")
+  const [panelTab, setPanelTab] = useState<"srt" | "sections" | "clips">("srt")
   const [showPanel, setShowPanel] = useState(false)
 
   // Clip playback: play only a specific time range
@@ -360,6 +374,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
       if (srt) {
         setSubtitles(parseSrt(srt))
         setHasSrt(true)
+        setShowPanel(true)
       }
     })
     window.electronAPI.getAnalysisData(projectId).then((data) => {
@@ -400,6 +415,8 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
         const srt = await window.electronAPI.readSrt(projectId)
         if (srt) setSubtitles(parseSrt(srt))
         setHasSrt(true)
+        setShowPanel(true)
+        setPanelTab("srt")
       } else {
         setTranscribeError(result.error ?? "Transcription failed")
       }
@@ -645,10 +662,10 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
           <Separator orientation="vertical" className="h-5" />
 
           {/* Step 2: Analysis */}
-          {analysis && !analyzing && (
+          {(hasSrt || analysis) && !analyzing && (
             <Button variant="ghost" size="sm" onClick={() => setShowPanel(!showPanel)}>
               <ListVideo className="mr-1 size-4" />
-              大綱
+              面板
             </Button>
           )}
           {!analyzing && hasSrt && (
@@ -742,36 +759,84 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
           </div>
         </div>
 
-        {/* Analysis panel */}
-        {showPanel && analysis && !isFullscreen && (
+        {/* Side panel */}
+        {showPanel && (hasSrt || analysis) && !isFullscreen && (
           <div className="flex w-80 shrink-0 flex-col border-l bg-background">
             <div className="flex border-b">
-              <button
-                className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
-                  analysisTab === "sections"
-                    ? "border-b-2 border-primary text-primary"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-                onClick={() => { setAnalysisTab("sections"); setActiveClip(null) }}
-              >
-                <ListVideo className="mr-1 inline size-3.5" />
-                段落 ({analysis.sections.length})
-              </button>
-              <button
-                className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
-                  analysisTab === "clips"
-                    ? "border-b-2 border-primary text-primary"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-                onClick={() => setAnalysisTab("clips")}
-              >
-                <Scissors className="mr-1 inline size-3.5" />
-                剪輯建議 ({analysis.clips.length})
-              </button>
+              {hasSrt && (
+                <button
+                  className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+                    panelTab === "srt"
+                      ? "border-b-2 border-primary text-primary"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  onClick={() => { setPanelTab("srt"); setActiveClip(null) }}
+                >
+                  <FileText className="mr-1 inline size-3.5" />
+                  字幕 ({subtitles.length})
+                </button>
+              )}
+              {analysis && (
+                <>
+                  <button
+                    className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+                      panelTab === "sections"
+                        ? "border-b-2 border-primary text-primary"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                    onClick={() => { setPanelTab("sections"); setActiveClip(null) }}
+                  >
+                    <ListVideo className="mr-1 inline size-3.5" />
+                    段落 ({analysis.sections.length})
+                  </button>
+                  <button
+                    className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+                      panelTab === "clips"
+                        ? "border-b-2 border-primary text-primary"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                    onClick={() => setPanelTab("clips")}
+                  >
+                    <Scissors className="mr-1 inline size-3.5" />
+                    剪輯建議 ({analysis.clips.length})
+                  </button>
+                </>
+              )}
             </div>
 
             <div className="flex-1 overflow-y-auto">
-              {analysisTab === "sections" && analysis.sections.map((sec, i) => {
+              {panelTab === "srt" && subtitles.map((sub, i) => {
+                const active = currentMs >= sub.startMs && currentMs < sub.endMs
+                return (
+                  <div
+                    key={i}
+                    className={`border-b px-3 py-2 transition-colors hover:bg-accent cursor-pointer ${
+                      active ? "bg-accent/50 border-l-2 border-l-primary" : ""
+                    }`}
+                    onClick={() => seekToMs(sub.startMs)}
+                  >
+                    <span className="text-[10px] tabular-nums text-muted-foreground">
+                      {formatMs(sub.startMs)} – {formatMs(sub.endMs)}
+                    </span>
+                    <textarea
+                      className="mt-0.5 w-full resize-none bg-transparent text-sm outline-none focus:ring-1 focus:ring-primary/50 rounded px-1"
+                      rows={1}
+                      value={sub.text}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => {
+                        const updated = [...subtitles]
+                        updated[i] = { ...updated[i], text: e.target.value }
+                        setSubtitles(updated)
+                      }}
+                      onBlur={() => {
+                        window.electronAPI.saveSrt(projectId, subtitlesToSrt(subtitles))
+                      }}
+                    />
+                  </div>
+                )
+              })}
+
+              {panelTab === "sections" && analysis?.sections.map((sec, i) => {
                 const active = currentMs >= sec.startMs && currentMs < sec.endMs
                 return (
                   <button
@@ -792,7 +857,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                 )
               })}
 
-              {analysisTab === "clips" && analysis.clips.map((clip, i) => {
+              {panelTab === "clips" && analysis?.clips.map((clip, i) => {
                 const isActive = activeClip?.startMs === clip.startMs && activeClip?.endMs === clip.endMs
                 return (
                   <button
