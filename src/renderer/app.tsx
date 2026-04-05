@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from "react"
 import { createRoot } from "react-dom/client"
-import { Scissors } from "lucide-react"
+import { Scissors, Sun, Moon } from "lucide-react"
 
 import "@/renderer/i18n"
 import { ProjectsPage, type VideoProject } from "@/renderer/pages/projects"
@@ -11,6 +11,12 @@ import { Toaster } from "@/renderer/components/ui/sonner"
 function App() {
   const [projects, setProjects] = useState<VideoProject[]>([])
   const [playerProject, setPlayerProject] = useState<VideoProject | null>(null)
+  const [dark, setDark] = useState(() => localStorage.getItem("theme") === "dark")
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", dark)
+    localStorage.setItem("theme", dark ? "dark" : "light")
+  }, [dark])
 
   const syncProjects = useCallback((stored: any[]) => {
     setProjects(stored.map((p) => ({ ...p, addedAt: new Date(p.addedAt) })))
@@ -43,7 +49,13 @@ function App() {
           </div>
           <span className="text-sm font-semibold">Vodcut</span>
         </div>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-1">
+          <button
+            className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            onClick={() => setDark((d) => !d)}
+          >
+            {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+          </button>
           <SettingsDialog />
         </div>
       </header>
