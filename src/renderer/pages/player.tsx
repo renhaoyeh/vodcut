@@ -752,7 +752,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
 
       <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
         {/* Video area */}
-        <ResizablePanel defaultSize={75} minSize={40}>
+        <ResizablePanel defaultSize={75} minSize={20}>
         <div
           ref={containerRef}
           className="relative flex h-full cursor-pointer items-center justify-center overflow-hidden bg-black"
@@ -812,11 +812,9 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
         </ResizablePanel>
 
         {/* Side panel */}
-        {!isFullscreen && (
-          <>
-          <ResizableHandle withHandle />
-          <ResizablePanel defaultSize={25} minSize={15} maxSize={50}>
-          <div className="flex h-full flex-col bg-background">
+        {!isFullscreen && <ResizableHandle withHandle />}
+        <ResizablePanel defaultSize={isFullscreen ? 0 : 25} minSize={isFullscreen ? 0 : 15}>
+          <div className={`flex h-full flex-col bg-background ${isFullscreen ? "hidden" : ""}`}>
             <div className="flex border-b">
               {hasSrt && (
                 <button
@@ -943,9 +941,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
               })}
             </div>
           </div>
-          </ResizablePanel>
-          </>
-        )}
+        </ResizablePanel>
       </ResizablePanelGroup>
     </div>
   )
