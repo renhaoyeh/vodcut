@@ -20,10 +20,11 @@ interface ElectronAPI {
   onAnalyzerStatus: (callback: (projectId: string, status: string) => void) => () => void;
 
   // Settings
-  getBackendSettings: () => Promise<{ transcriptionApiKey: string; transcriptionModel: string; analysisApiKey: string }>;
+  getBackendSettings: () => Promise<{ transcriptionApiKey: string; transcriptionModel: string; analysisApiKey: string; analysisModel: string }>;
   setTranscriptionApiKey: (key: string) => Promise<{ success: boolean }>;
   setTranscriptionModel: (model: string) => Promise<{ success: boolean }>;
   setAnalysisApiKey: (key: string) => Promise<{ success: boolean }>;
+  setAnalysisModel: (model: string) => Promise<{ success: boolean }>;
   transcribe: (projectId: string) => Promise<{ success: boolean; srtPath?: string; error?: string }>;
   readSrt: (projectId: string) => Promise<string | null>;
   onWhisperProgress: (callback: (projectId: string, percent: number) => void) => () => void;

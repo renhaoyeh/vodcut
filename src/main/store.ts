@@ -36,6 +36,7 @@ interface SettingsSchema {
   transcriptionApiKey: string;
   transcriptionModel: GroqModel;
   analysisApiKey: string;
+  analysisModel: string;
 }
 
 export const settingsStore = new Store<SettingsSchema>({
@@ -44,6 +45,7 @@ export const settingsStore = new Store<SettingsSchema>({
     transcriptionApiKey: '',
     transcriptionModel: 'whisper-large-v3-turbo',
     analysisApiKey: '',
+    analysisModel: 'llama-3.3-70b-versatile',
   },
 });
 

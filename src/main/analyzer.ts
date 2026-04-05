@@ -59,7 +59,7 @@ function callGroqChat(systemPrompt: string, userMessage: string): Promise<string
   }
 
   const body = JSON.stringify({
-    model: 'llama-3.3-70b-versatile',
+    model: settingsStore.get('analysisModel', 'llama-3.3-70b-versatile'),
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userMessage },

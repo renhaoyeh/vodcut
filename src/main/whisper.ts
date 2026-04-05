@@ -32,11 +32,17 @@ export function registerWhisperHandlers(): void {
       transcriptionApiKey: settingsStore.get('transcriptionApiKey', ''),
       transcriptionModel: settingsStore.get('transcriptionModel', 'whisper-large-v3-turbo') as GroqModel,
       analysisApiKey: settingsStore.get('analysisApiKey', ''),
+      analysisModel: settingsStore.get('analysisModel', 'llama-3.3-70b-versatile'),
     };
   });
 
   ipcMain.handle('settings:setAnalysisApiKey', (_event, key: string) => {
     settingsStore.set('analysisApiKey', key);
+    return { success: true };
+  });
+
+  ipcMain.handle('settings:setAnalysisModel', (_event, model: string) => {
+    settingsStore.set('analysisModel', model);
     return { success: true };
   });
 

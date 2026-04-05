@@ -16,12 +16,14 @@ export function SettingsPage() {
   const [transcriptionApiKey, setTranscriptionApiKey] = useState("")
   const [transcriptionModel, setTranscriptionModel] = useState("whisper-large-v3-turbo")
   const [analysisApiKey, setAnalysisApiKey] = useState("")
+  const [analysisModel, setAnalysisModel] = useState("llama-3.3-70b-versatile")
 
   useEffect(() => {
     window.electronAPI.getBackendSettings().then((settings) => {
       setTranscriptionApiKey(settings.transcriptionApiKey)
       setTranscriptionModel(settings.transcriptionModel)
       setAnalysisApiKey(settings.analysisApiKey)
+      setAnalysisModel(settings.analysisModel)
     })
   }, [])
 
@@ -32,6 +34,11 @@ export function SettingsPage() {
   const handleAnalysisApiKeySave = useCallback(async () => {
     await window.electronAPI.setAnalysisApiKey(analysisApiKey)
   }, [analysisApiKey])
+
+  const handleAnalysisModelChange = useCallback(async (value: string) => {
+    setAnalysisModel(value)
+    await window.electronAPI.setAnalysisModel(value)
+  }, [])
 
   const handleTranscriptionModelChange = useCallback(async (value: string) => {
     setTranscriptionModel(value)
@@ -89,6 +96,23 @@ export function SettingsPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
+            <Label className="text-sm">Model</Label>
+            <RadioGroup value={analysisModel} onValueChange={handleAnalysisModelChange}>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="llama-3.3-70b-versatile" id="analysis-llama70b" />
+                <Label htmlFor="analysis-llama70b" className="font-normal">Llama 3.3 70B <span className="text-muted-foreground text-xs">— free, 128k context</span></Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="llama-3.1-8b-instant" id="analysis-llama8b" />
+                <Label htmlFor="analysis-llama8b" className="font-normal">Llama 3.1 8B <span className="text-muted-foreground text-xs">— free, faster, 128k context</span></Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="meta-llama/llama-4-scout-17b-16e-instruct" id="analysis-scout" />
+                <Label htmlFor="analysis-scout" className="font-normal">Llama 4 Scout 17B <span className="text-muted-foreground text-xs">— free, 131k context</span></Label>
+              </div>
+            </RadioGroup>
+          </div>
+          <div className="space-y-2">
             <Label htmlFor="groq-analysis-api-key" className="text-sm">API Key</Label>
             <div className="flex gap-2">
               <Input
@@ -101,7 +125,7 @@ export function SettingsPage() {
               <Button size="sm" onClick={handleAnalysisApiKeySave}>Save</Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Uses Llama 3.3 70B for analysis. Get your key at{" "}
+              Get your key at{" "}
               <a href="https://console.groq.com" className="underline" target="_blank" rel="noreferrer">console.groq.com</a>
             </p>
           </div>

@@ -34,6 +34,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setTranscriptionApiKey: (key: string) => ipcRenderer.invoke('settings:setTranscriptionApiKey', key),
   setTranscriptionModel: (model: string) => ipcRenderer.invoke('settings:setTranscriptionModel', model),
   setAnalysisApiKey: (key: string) => ipcRenderer.invoke('settings:setAnalysisApiKey', key),
+  setAnalysisModel: (model: string) => ipcRenderer.invoke('settings:setAnalysisModel', model),
   transcribe: (projectId: string) => ipcRenderer.invoke('whisper:transcribe', projectId),
   readSrt: (projectId: string) => ipcRenderer.invoke('store:readSrt', projectId),
   onWhisperProgress: (callback: (projectId: string, percent: number) => void) => {
