@@ -1,58 +1,21 @@
 import { useState, useCallback, useEffect } from "react"
 import { createRoot } from "react-dom/client"
 import {
-  Film,
-  Clock,
-  HardDrive,
-  TrendingUp,
+  Scissors,
+  FolderOpen,
+  Settings,
 } from "lucide-react"
 
-import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/renderer/components/ui/sidebar"
-import { Separator } from "@/renderer/components/ui/separator"
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/renderer/components/ui/card"
-import { AppSidebar, type Page } from "@/renderer/components/app-sidebar"
 import { ProjectsPage, type VideoProject } from "@/renderer/pages/projects"
 import { SettingsPage } from "@/renderer/pages/settings"
 import { PlayerPage } from "@/renderer/pages/player"
 
-const stats = [
-  { title: "Total Projects", value: "12", description: "3 in progress", icon: Film },
-  { title: "Editing Hours", value: "48.5", description: "+12% from last week", icon: Clock },
-  { title: "Storage Used", value: "24.3 GB", description: "of 100 GB", icon: HardDrive },
-  { title: "Exports", value: "36", description: "+8 this week", icon: TrendingUp },
+type Page = "projects" | "settings"
+
+const navItems = [
+  { title: "Projects", icon: FolderOpen, page: "projects" as Page },
+  { title: "Settings", icon: Settings, page: "settings" as Page },
 ]
-
-function Dashboard() {
-  return (
-    <div className="flex flex-1 flex-col gap-4 p-4">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => (
-          <Card key={stat.title}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
-              <stat.icon className="size-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stat.value}</div>
-              <p className="text-xs text-muted-foreground">{stat.description}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-const pageTitle: Record<Page, string> = {
-  dashboard: "Dashboard",
-  projects: "Projects",
-  settings: "Settings",
-}
 
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>("projects")
@@ -82,14 +45,32 @@ function App() {
   }, [projects])
 
   return (
-    <SidebarProvider>
-      <AppSidebar currentPage={currentPage} onNavigate={setCurrentPage} />
-      <SidebarInset>
-        <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
-          <SidebarTrigger className="-ml-1" />
-          <Separator orientation="vertical" className="mr-2 h-4!" />
-          <h1 className="text-sm font-medium">{pageTitle[currentPage]}</h1>
-        </header>
+    <div className="flex h-screen flex-col">
+      <header className="flex h-12 shrink-0 items-center gap-4 border-b px-4">
+        <div className="flex items-center gap-2">
+          <div className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
+            <Scissors className="size-3.5" />
+          </div>
+          <span className="text-sm font-semibold">Vodcut</span>
+        </div>
+        <nav className="flex items-center gap-1">
+          {navItems.map((item) => (
+            <button
+              key={item.page}
+              onClick={() => setCurrentPage(item.page)}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors ${
+                currentPage === item.page
+                  ? "bg-muted font-medium"
+                  : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+              }`}
+            >
+              <item.icon className="size-4" />
+              {item.title}
+            </button>
+          ))}
+        </nav>
+      </header>
+      <main className="flex flex-1 flex-col overflow-hidden">
         {playerProject ? (
           <PlayerPage
             projectId={playerProject.id}
@@ -100,7 +81,6 @@ function App() {
           />
         ) : (
           <>
-            {currentPage === "dashboard" && <Dashboard />}
             {currentPage === "projects" && (
               <ProjectsPage
                 projects={projects}
@@ -112,8 +92,8 @@ function App() {
             {currentPage === "settings" && <SettingsPage />}
           </>
         )}
-      </SidebarInset>
-    </SidebarProvider>
+      </main>
+    </div>
   )
 }
 
