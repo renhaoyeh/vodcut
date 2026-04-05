@@ -2,12 +2,6 @@
   "app": {
     "name": "Vodcut"
   },
-  "nav": {
-    "dashboard": "儀表板",
-    "projects": "專案",
-    "settings": "設定",
-    "main": "主選單"
-  },
   "projects": {
     "dropZone": "將影片檔案拖曳至此",
     "supportedFormats": "支援 MP4、MOV、AVI、MKV、WebM",

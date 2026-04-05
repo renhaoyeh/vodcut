@@ -2,12 +2,6 @@
   "app": {
     "name": "Vodcut"
   },
-  "nav": {
-    "dashboard": "Dashboard",
-    "projects": "Projects",
-    "settings": "Settings",
-    "main": "Main"
-  },
   "projects": {
     "dropZone": "Drop video files here",
     "supportedFormats": "Supports MP4, MOV, AVI, MKV, WebM",
