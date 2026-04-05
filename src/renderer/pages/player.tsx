@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from "react"
 import { ArrowLeft, Maximize, Minimize, Pause, Play, Loader2, Sparkles, ListVideo, Scissors, Volume2, VolumeX, Mic, FileText } from "lucide-react"
 import { Button } from "@/renderer/components/ui/button"
 import { Separator } from "@/renderer/components/ui/separator"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/renderer/components/ui/select"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/renderer/components/ui/select"
 import type { AnalysisData } from "@/main/store"
 
 const TRANSCRIPTION_MODELS = [
@@ -357,6 +357,11 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
   const [analysisModelKey, setAnalysisModelKey] = useState("gemini:gemini-2.5-flash")
   const [panelTab, setPanelTab] = useState<"srt" | "sections" | "clips">("srt")
 
+  // API key availability
+  const [hasTranscriptionKey, setHasTranscriptionKey] = useState(false)
+  const [hasGroqKey, setHasGroqKey] = useState(false)
+  const [hasGeminiKey, setHasGeminiKey] = useState(false)
+
   // Clip playback: play only a specific time range
   const [activeClip, setActiveClip] = useState<{ startMs: number; endMs: number } | null>(null)
   const activeClipRef = useRef(activeClip)
@@ -366,6 +371,15 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
   const subtitlesRef = useRef<Subtitle[]>([])
   subtitlesRef.current = subtitles
   const handlersRef = useRef<ReturnType<typeof createVideoEventHandlers> | null>(null)
+
+  // Load API key availability
+  useEffect(() => {
+    window.electronAPI.getBackendSettings().then((s) => {
+      setHasTranscriptionKey(!!s.transcriptionApiKey)
+      setHasGroqKey(!!s.groqApiKey)
+      setHasGeminiKey(!!s.geminiApiKey)
+    })
+  }, [])
 
   // Load SRT + existing analysis
   useEffect(() => {
@@ -626,72 +640,90 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
           <span className="flex-1 truncate text-sm font-medium">{fileName}</span>
 
           {/* Step 1: Transcription */}
-          {!transcribing && (
-            <div className="flex items-center gap-1">
-              <Select value={transcriptionModelKey} onValueChange={setTranscriptionModelKey}>
-                <SelectTrigger className="h-8 w-40 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TRANSCRIPTION_MODELS.map((m) => (
-                    <SelectItem key={m.value} value={m.value} className="text-xs">
-                      {m.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button variant="outline" size="sm" onClick={handleTranscribe}>
-                <Mic className="mr-1 size-4" />
-                {hasSrt ? "重新轉錄" : "轉錄"}
-              </Button>
-            </div>
-          )}
-          {transcribing && (
-            <div className="flex items-center gap-2">
-              <Loader2 className="size-4 animate-spin" />
-              <span className="text-xs text-muted-foreground">{transcribeStage} {transcribeProgress > 0 ? `${transcribeProgress}%` : ""}</span>
-            </div>
-          )}
-          {transcribeError && (
-            <span className="text-xs text-destructive truncate max-w-48" title={transcribeError}>
-              {transcribeError}
-            </span>
-          )}
+          <div className="flex items-center gap-1">
+            {!transcribing ? (
+              <>
+                <Select value={transcriptionModelKey} onValueChange={setTranscriptionModelKey}>
+                  <SelectTrigger className="h-8 w-40 text-xs" disabled={!hasTranscriptionKey}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TRANSCRIPTION_MODELS.map((m) => (
+                      <SelectItem key={m.value} value={m.value} className="text-xs">
+                        {m.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button variant="outline" size="sm" onClick={handleTranscribe} disabled={!hasTranscriptionKey}
+                  title={!hasTranscriptionKey ? "請先在 Settings 填入 Groq Whisper API Key" : undefined}
+                >
+                  <Mic className="mr-1 size-4" />
+                  {hasSrt ? "重新轉錄" : "轉錄"}
+                </Button>
+              </>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Loader2 className="size-4 animate-spin" />
+                <span className="text-xs text-muted-foreground">{transcribeStage} {transcribeProgress > 0 ? `${transcribeProgress}%` : ""}</span>
+              </div>
+            )}
+            {transcribeError && (
+              <span className="text-xs text-destructive truncate max-w-48" title={transcribeError}>
+                {transcribeError}
+              </span>
+            )}
+          </div>
 
           <Separator orientation="vertical" className="h-5" />
 
           {/* Step 2: Analysis */}
-          {!analyzing && hasSrt && (
-            <div className="flex items-center gap-1">
-              <Select value={analysisModelKey} onValueChange={setAnalysisModelKey}>
-                <SelectTrigger className="h-8 w-44 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ANALYSIS_MODELS.map((m) => (
-                    <SelectItem key={m.value} value={m.value} className="text-xs">
-                      {m.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button variant="outline" size="sm" onClick={handleAnalyze}>
-                <Sparkles className="mr-1 size-4" />
-                {analysis ? "重新分析" : "分析大綱"}
+          <div className="flex items-center gap-1">
+            {!analyzing ? (
+              <>
+                <Select value={analysisModelKey} onValueChange={setAnalysisModelKey}>
+                  <SelectTrigger className="h-8 w-44 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectLabel className="text-[10px]">Gemini{!hasGeminiKey ? " (no key)" : ""}</SelectLabel>
+                      {ANALYSIS_MODELS.filter((m) => m.value.startsWith("gemini:")).map((m) => (
+                        <SelectItem key={m.value} value={m.value} className="text-xs" disabled={!hasGeminiKey}>
+                          {m.label}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                    <SelectGroup>
+                      <SelectLabel className="text-[10px]">Groq{!hasGroqKey ? " (no key)" : ""}</SelectLabel>
+                      {ANALYSIS_MODELS.filter((m) => m.value.startsWith("groq:")).map((m) => (
+                        <SelectItem key={m.value} value={m.value} className="text-xs" disabled={!hasGroqKey}>
+                          {m.label}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+                <Button variant="outline" size="sm" onClick={handleAnalyze}
+                  disabled={!hasSrt || (analysisModelKey.startsWith("gemini:") ? !hasGeminiKey : !hasGroqKey)}
+                  title={!hasSrt ? "請先轉錄" : undefined}
+                >
+                  <Sparkles className="mr-1 size-4" />
+                  {analysis ? "重新分析" : "分析大綱"}
+                </Button>
+              </>
+            ) : (
+              <Button variant="outline" size="sm" disabled>
+                <Loader2 className="mr-1 size-4 animate-spin" />
+                分析中...
               </Button>
-            </div>
-          )}
-          {analyzing && (
-            <Button variant="outline" size="sm" disabled>
-              <Loader2 className="mr-1 size-4 animate-spin" />
-              分析中...
-            </Button>
-          )}
-          {analysisError && (
-            <span className="text-xs text-destructive truncate max-w-48" title={analysisError}>
-              {analysisError}
-            </span>
-          )}
+            )}
+            {analysisError && (
+              <span className="text-xs text-destructive truncate max-w-48" title={analysisError}>
+                {analysisError}
+              </span>
+            )}
+          </div>
         </div>
       )}
 
