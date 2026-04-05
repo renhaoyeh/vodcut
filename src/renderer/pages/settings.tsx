@@ -93,7 +93,7 @@ export function SettingsPage() {
                     <div className="flex items-center gap-2">
                       <Loader2 className="size-4 animate-spin" />
                       <span className="text-xs text-muted-foreground">
-                        {downloading[model.id]}%
+                        {downloading[model.id] >= 100 ? "寫入中..." : `${downloading[model.id]}%`}
                       </span>
                     </div>
                   ) : model.downloaded ? (
