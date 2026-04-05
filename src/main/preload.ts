@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   pauseTranscription: (projectId: string) => ipcRenderer.invoke('whisper:pause', projectId),
   resumeTranscription: (projectId: string) => ipcRenderer.invoke('whisper:resume', projectId),
   releaseModel: () => ipcRenderer.invoke('whisper:releaseModel'),
+  readSrt: (projectId: string) => ipcRenderer.invoke('store:readSrt', projectId),
   onWhisperProgress: (callback: (projectId: string, percent: number) => void) => {
     const listener = (_event: any, projectId: string, percent: number) => callback(projectId, percent);
     ipcRenderer.on('whisper:progress', listener);

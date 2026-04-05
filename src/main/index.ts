@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, session } from 'electron';
 import { registerStoreHandlers } from './store';
 import { registerFfmpegHandlers } from './ffmpeg';
 import { registerWhisperHandlers } from './whisper';
@@ -20,6 +20,7 @@ const createWindow = (): void => {
     width: 1280,
     webPreferences: {
       preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
+      webSecurity: false,
     },
   });
 
@@ -34,6 +35,14 @@ const createWindow = (): void => {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.on('ready', () => {
+  // Remove CSP headers injected by webpack dev server so file:// video sources work
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const headers = { ...details.responseHeaders };
+    delete headers['content-security-policy'];
+    delete headers['Content-Security-Policy'];
+    callback({ responseHeaders: headers });
+  });
+
   registerStoreHandlers();
   registerFfmpegHandlers();
   registerWhisperHandlers();

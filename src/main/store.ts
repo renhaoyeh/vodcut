@@ -85,4 +85,14 @@ export function registerStoreHandlers(): void {
     store.set('projects', current.map((p) => (p.id === id ? { ...p, status } : p)));
     return store.get('projects');
   });
+
+  ipcMain.handle('store:readSrt', (_event, projectId: string) => {
+    const project = store.get('projects').find((p) => p.id === projectId);
+    if (!project?.srtPath) return null;
+    try {
+      return fs.readFileSync(project.srtPath, 'utf8');
+    } catch {
+      return null;
+    }
+  });
 }

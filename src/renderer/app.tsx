@@ -18,6 +18,7 @@ import {
 import { AppSidebar, type Page } from "@/renderer/components/app-sidebar"
 import { ProjectsPage, type VideoProject } from "@/renderer/pages/projects"
 import { SettingsPage } from "@/renderer/pages/settings"
+import { PlayerPage } from "@/renderer/pages/player"
 
 const stats = [
   { title: "Total Projects", value: "12", description: "3 in progress", icon: Film },
@@ -57,6 +58,7 @@ function App() {
   const [currentPage, setCurrentPage] = useState<Page>("projects")
   const [projects, setProjects] = useState<VideoProject[]>([])
   const [progress, setProgress] = useState<Record<string, { stage: string; percent: number; paused: boolean }>>({})
+  const [playerProject, setPlayerProject] = useState<VideoProject | null>(null)
 
   const syncProjects = useCallback((stored: any[]) => {
     setProjects(stored.map((p) => ({ ...p, addedAt: new Date(p.addedAt) })))
@@ -157,6 +159,11 @@ function App() {
     })
   }, [])
 
+  const handlePreview = useCallback((id: string) => {
+    const project = projects.find((p) => p.id === id)
+    if (project) setPlayerProject(project)
+  }, [projects])
+
   return (
     <SidebarProvider>
       <AppSidebar currentPage={currentPage} onNavigate={setCurrentPage} />
@@ -166,19 +173,31 @@ function App() {
           <Separator orientation="vertical" className="mr-2 h-4!" />
           <h1 className="text-sm font-medium">{pageTitle[currentPage]}</h1>
         </header>
-        {currentPage === "dashboard" && <Dashboard />}
-        {currentPage === "projects" && (
-          <ProjectsPage
-            projects={projects}
-            progress={progress}
-            onAddProjects={handleAddProjects}
-            onRemoveProject={handleRemoveProject}
-            onConvertToSrt={handleConvertToSrt}
-            onPause={handlePause}
-            onResume={handleResume}
+        {playerProject ? (
+          <PlayerPage
+            projectId={playerProject.id}
+            filePath={playerProject.filePath}
+            fileName={playerProject.fileName}
+            onBack={() => setPlayerProject(null)}
           />
+        ) : (
+          <>
+            {currentPage === "dashboard" && <Dashboard />}
+            {currentPage === "projects" && (
+              <ProjectsPage
+                projects={projects}
+                progress={progress}
+                onAddProjects={handleAddProjects}
+                onRemoveProject={handleRemoveProject}
+                onConvertToSrt={handleConvertToSrt}
+                onPause={handlePause}
+                onResume={handleResume}
+                onPreview={handlePreview}
+              />
+            )}
+            {currentPage === "settings" && <SettingsPage />}
+          </>
         )}
-        {currentPage === "settings" && <SettingsPage />}
       </SidebarInset>
     </SidebarProvider>
   )

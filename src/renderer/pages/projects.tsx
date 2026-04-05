@@ -8,6 +8,7 @@ import {
   FolderOpen,
   Pause,
   Play,
+  MonitorPlay,
 } from "lucide-react"
 
 import { Button } from "@/renderer/components/ui/button"
@@ -26,6 +27,7 @@ export interface VideoProject {
   id: string
   fileName: string
   filePath: string
+  srtPath?: string
   addedAt: Date
   status: "imported" | "converting" | "completed"
 }
@@ -44,6 +46,7 @@ interface ProjectsPageProps {
   onConvertToSrt: (id: string) => void
   onPause: (id: string) => void
   onResume: (id: string) => void
+  onPreview: (id: string) => void
 }
 
 export function ProjectsPage({
@@ -54,6 +57,7 @@ export function ProjectsPage({
   onConvertToSrt,
   onPause,
   onResume,
+  onPreview,
 }: ProjectsPageProps) {
   const [isDragOver, setIsDragOver] = useState(false)
 
@@ -205,6 +209,12 @@ export function ProjectsPage({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
+                    {project.status === "completed" && project.srtPath && (
+                      <DropdownMenuItem onClick={() => onPreview(project.id)}>
+                        <MonitorPlay className="mr-2 size-4" />
+                        Preview
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem onClick={() => onConvertToSrt(project.id)}>
                       <FileText className="mr-2 size-4" />
                       Convert to SRT

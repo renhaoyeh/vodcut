@@ -35,6 +35,7 @@ interface ElectronAPI {
   pauseTranscription: (projectId: string) => Promise<void>;
   resumeTranscription: (projectId: string) => Promise<void>;
   releaseModel: () => Promise<void>;
+  readSrt: (projectId: string) => Promise<string | null>;
   onWhisperProgress: (callback: (projectId: string, percent: number) => void) => () => void;
   onWhisperStage: (callback: (projectId: string, stage: string) => void) => () => void;
   onDownloadProgress: (callback: (modelSize: string, percent: number) => void) => () => void;
