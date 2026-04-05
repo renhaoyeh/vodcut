@@ -24,7 +24,7 @@ interface ElectronAPI {
   onFfmpegProgress: (callback: (projectId: string, percent: number) => void) => () => void;
 
   // Whisper
-  getModelInfo: () => Promise<{ models: ModelInfo[]; selectedModel: string; modelsDir: string }>;
+  getModelInfo: () => Promise<{ models: ModelInfo[]; selectedModel: string; modelsDir: string; gpuBackend: string }>;
   selectModel: (modelSize: string) => Promise<{ success: boolean }>;
   downloadModel: (modelSize: string) => Promise<{ success: boolean; error?: string }>;
   transcribe: (projectId: string) => Promise<{ success: boolean; srtPath?: string; error?: string }>;

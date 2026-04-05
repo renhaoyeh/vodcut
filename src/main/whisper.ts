@@ -10,6 +10,7 @@ type WhisperContext = Awaited<ReturnType<typeof initWhisper>>;
 
 let context: WhisperContext | null = null;
 let loadedModelPath: string | null = null;
+let gpuBackend: string = 'unknown';
 
 const store = new Store();
 
@@ -95,9 +96,22 @@ async function getContext(modelSize: WhisperModelSize): Promise<WhisperContext> 
   }
 
   console.log('[whisper] Loading model:', modelPath);
-  context = await initWhisper({ filePath: modelPath, useGpu: true });
+  if (process.platform === 'win32') {
+    // Windows: try CUDA variant, fallback to CPU
+    try {
+      context = await initWhisper({ filePath: modelPath, useGpu: true }, 'cuda');
+      gpuBackend = 'cuda';
+    } catch {
+      context = await initWhisper({ filePath: modelPath, useGpu: true });
+      gpuBackend = 'cpu';
+    }
+  } else {
+    // macOS: Metal is built into the default variant, useGpu enables it
+    context = await initWhisper({ filePath: modelPath, useGpu: true });
+    gpuBackend = process.platform === 'darwin' ? 'metal' : 'cpu';
+  }
   loadedModelPath = modelPath;
-  console.log('[whisper] Model loaded');
+  console.log(`[whisper] Model loaded (backend: ${gpuBackend})`);
   return context;
 }
 
@@ -140,7 +154,7 @@ export function registerWhisperHandlers(): void {
       downloaded: isModelDownloaded(key as WhisperModelSize),
       selected: key === selectedModel,
     }));
-    return { models, selectedModel, modelsDir: getModelsDir() };
+    return { models, selectedModel, modelsDir: getModelsDir(), gpuBackend };
   });
 
   ipcMain.handle('whisper:selectModel', (_event, modelSize: WhisperModelSize) => {

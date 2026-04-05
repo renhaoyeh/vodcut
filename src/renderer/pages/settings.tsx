@@ -22,12 +22,14 @@ interface ModelInfo {
 export function SettingsPage() {
   const [models, setModels] = useState<ModelInfo[]>([])
   const [modelsDir, setModelsDir] = useState("")
+  const [gpuBackend, setGpuBackend] = useState("unknown")
   const [downloading, setDownloading] = useState<Record<string, number>>({})
 
   const loadModels = useCallback(() => {
     window.electronAPI.getModelInfo().then((info) => {
       setModels(info.models)
       setModelsDir(info.modelsDir)
+      setGpuBackend(info.gpuBackend)
     })
   }, [])
 
@@ -113,9 +115,11 @@ export function SettingsPage() {
               </div>
             ))}
           </div>
-          <p className="mt-4 text-xs text-muted-foreground">
-            Models stored in: {modelsDir}
-          </p>
+          <div className="mt-4 flex items-center gap-3 text-xs text-muted-foreground">
+            <span>Backend: <span className={gpuBackend === 'cuda' || gpuBackend === 'metal' ? 'text-green-500 font-medium' : ''}>{gpuBackend.toUpperCase()}</span></span>
+            <span>·</span>
+            <span>Models: {modelsDir}</span>
+          </div>
         </CardContent>
       </Card>
     </div>
