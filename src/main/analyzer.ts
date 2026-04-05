@@ -1,6 +1,7 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import https from 'https';
 import fs from 'fs';
+import path from 'path';
 import { getProjectById, updateProject, settingsStore, projectPaths, writeProjectFile, readProjectFile } from './store';
 
 const SYSTEM_PROMPT = `你是一位專業的影片剪輯顧問。使用者會給你一段影片的逐字稿（SRT 格式，含時間戳記），
@@ -244,6 +245,11 @@ export function registerAnalyzerHandlers(): void {
 
       // Save analysis to project folder
       writeProjectFile(paths.analysis, analysisData);
+
+      // Also save a copy next to the video
+      const videoDir = path.dirname(project.filePath);
+      const videoName = path.basename(project.filePath, path.extname(project.filePath));
+      try { fs.writeFileSync(path.join(videoDir, `${videoName}.analysis.json`), JSON.stringify(analysisData, null, 2), 'utf8'); } catch {}
 
       win?.webContents.send('analyzer:status', projectId, 'done');
       return { success: true, data: analysisData };

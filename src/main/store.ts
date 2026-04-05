@@ -172,8 +172,15 @@ export function registerStoreHandlers(): void {
 
   ipcMain.handle('store:saveSrt', (_event, projectId: string, content: string) => {
     const paths = projectPaths(projectId);
+    const project = getProjectById(projectId);
     try {
       fs.writeFileSync(paths.srt, content, 'utf8');
+      // Also update the copy next to the video
+      if (project) {
+        const videoDir = path.dirname(project.filePath);
+        const videoName = path.basename(project.filePath, path.extname(project.filePath));
+        try { fs.writeFileSync(path.join(videoDir, `${videoName}.srt`), content, 'utf8'); } catch {}
+      }
       return { success: true };
     } catch (e) {
       return { success: false, error: (e as Error).message };

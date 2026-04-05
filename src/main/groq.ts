@@ -166,6 +166,11 @@ export async function transcribeWithGroq(
     const srtContent = segmentsToSrt(allSegments);
     fs.writeFileSync(paths.srt, srtContent, 'utf8');
 
+    // Also save a copy next to the video
+    const videoDir = path.dirname(project.filePath);
+    const videoName = path.basename(project.filePath, path.extname(project.filePath));
+    try { fs.writeFileSync(path.join(videoDir, `${videoName}.srt`), srtContent, 'utf8'); } catch {}
+
     // Clean up progress file
     try { fs.unlinkSync(paths.progress); } catch {}
 
