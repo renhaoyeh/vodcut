@@ -854,7 +854,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                       className={`border-b px-3 py-2 transition-colors hover:bg-accent cursor-pointer ${
                         active ? "bg-accent/50 border-l-2 border-l-primary" : ""
                       }`}
-                      onClick={() => seekToMs(sub.startMs)}
+                      onClick={() => { setActiveClip(null); seekToMs(sub.startMs) }}
                     >
                       <span className="text-[10px] tabular-nums text-muted-foreground">
                         {formatMs(sub.startMs)} – {formatMs(sub.endMs)}
@@ -896,7 +896,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                             className={`w-full border-b px-3 py-2.5 text-left transition-colors hover:bg-accent ${
                               active ? "bg-accent/50 border-l-2 border-l-primary" : ""
                             }`}
-                            onClick={() => seekToMs(sec.startMs)}
+                            onClick={() => { setActiveClip(null); seekToMs(sec.startMs) }}
                           >
                             <div className="flex items-baseline gap-2">
                               <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
