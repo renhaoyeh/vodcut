@@ -391,7 +391,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
   // Load API key availability
   useEffect(() => {
     window.electronAPI.getBackendSettings().then((s) => {
-      setHasTranscriptionKey(!!s.transcriptionApiKey)
+      setHasTranscriptionKey(s.transcriptionApiKeys?.length > 0)
       setHasGroqKey(!!s.groqApiKey)
       setHasGeminiKey(!!s.geminiApiKey)
     })

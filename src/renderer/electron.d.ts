@@ -21,11 +21,11 @@ interface ElectronAPI {
 
   // Settings
   getBackendSettings: () => Promise<{
-    transcriptionApiKey: string;
+    transcriptionApiKeys: string[];
     groqApiKey: string;
     geminiApiKey: string;
   }>;
-  setTranscriptionApiKey: (key: string) => Promise<{ success: boolean }>;
+  setTranscriptionApiKeys: (keys: string[]) => Promise<{ success: boolean }>;
   setGroqApiKey: (key: string) => Promise<{ success: boolean }>;
   setGeminiApiKey: (key: string) => Promise<{ success: boolean }>;
   transcribe: (projectId: string, model: string) => Promise<{ success: boolean; srtPath?: string; error?: string }>;

@@ -29,8 +29,15 @@ export function segmentsToSrt(segments: SrtSegment[]): string {
 
 export function registerWhisperHandlers(): void {
   ipcMain.handle('settings:getAll', () => {
+    // Migrate old single-key format to array
+    const oldKey = (settingsStore as any).get('transcriptionApiKey') as string | undefined;
+    if (oldKey && typeof oldKey === 'string') {
+      settingsStore.set('transcriptionApiKeys', [oldKey]);
+      (settingsStore as any).delete('transcriptionApiKey');
+    }
+
     return {
-      transcriptionApiKey: settingsStore.get('transcriptionApiKey', ''),
+      transcriptionApiKeys: settingsStore.get('transcriptionApiKeys', []),
       groqApiKey: settingsStore.get('groqApiKey', ''),
       geminiApiKey: settingsStore.get('geminiApiKey', ''),
     };
@@ -46,8 +53,8 @@ export function registerWhisperHandlers(): void {
     return { success: true };
   });
 
-  ipcMain.handle('settings:setTranscriptionApiKey', (_event, key: string) => {
-    settingsStore.set('transcriptionApiKey', key);
+  ipcMain.handle('settings:setTranscriptionApiKeys', (_event, keys: string[]) => {
+    settingsStore.set('transcriptionApiKeys', keys);
     return { success: true };
   });
 
@@ -62,11 +69,11 @@ export function registerWhisperHandlers(): void {
       return { success: false, error: 'Audio not extracted yet. Run extract audio first.' };
     }
 
-    const apiKey = settingsStore.get('transcriptionApiKey', '') as string;
-    if (!apiKey) {
+    const apiKeys = (settingsStore.get('transcriptionApiKeys', []) as string[]).filter(Boolean);
+    if (apiKeys.length === 0) {
       return { success: false, error: 'Groq API key not configured. Set it in Settings.' };
     }
     const win = BrowserWindow.fromWebContents(event.sender);
-    return transcribeWithGroq(projectId, paths.audio, apiKey, model as GroqModel, win);
+    return transcribeWithGroq(projectId, paths.audio, apiKeys, model as GroqModel, win);
   });
 }

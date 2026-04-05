@@ -15,22 +15,23 @@ import { Settings } from "lucide-react"
 
 export function SettingsDialog() {
   const [open, setOpen] = useState(false)
-  const [transcriptionApiKey, setTranscriptionApiKey] = useState("")
+  const [transcriptionApiKeys, setTranscriptionApiKeys] = useState("")
   const [groqApiKey, setGroqApiKey] = useState("")
   const [geminiApiKey, setGeminiApiKey] = useState("")
 
   useEffect(() => {
     if (!open) return
     window.electronAPI.getBackendSettings().then((s) => {
-      setTranscriptionApiKey(s.transcriptionApiKey)
+      setTranscriptionApiKeys((s.transcriptionApiKeys ?? []).join("\n"))
       setGroqApiKey(s.groqApiKey)
       setGeminiApiKey(s.geminiApiKey)
     })
   }, [open])
 
-  const handleTranscriptionApiKeySave = useCallback(async () => {
-    await window.electronAPI.setTranscriptionApiKey(transcriptionApiKey)
-  }, [transcriptionApiKey])
+  const handleTranscriptionApiKeysSave = useCallback(async () => {
+    const keys = transcriptionApiKeys.split("\n").map(k => k.trim()).filter(Boolean)
+    await window.electronAPI.setTranscriptionApiKeys(keys)
+  }, [transcriptionApiKeys])
 
   const handleGroqApiKeySave = useCallback(async () => {
     await window.electronAPI.setGroqApiKey(groqApiKey)
@@ -54,20 +55,21 @@ export function SettingsDialog() {
         </DialogHeader>
         <div className="space-y-5 pt-2">
           <div className="space-y-2">
-            <Label htmlFor="transcription-api-key" className="text-sm">Groq Whisper (Transcription)</Label>
+            <Label htmlFor="transcription-api-keys" className="text-sm">Groq Whisper (Transcription)</Label>
             <div className="flex gap-2">
-              <Input
-                id="transcription-api-key"
-                type="password"
-                placeholder="gsk_..."
-                value={transcriptionApiKey}
-                onChange={(e) => setTranscriptionApiKey(e.target.value)}
+              <textarea
+                id="transcription-api-keys"
+                className="flex min-h-15 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                placeholder={"gsk_...\ngsk_..."}
+                value={transcriptionApiKeys}
+                onChange={(e) => setTranscriptionApiKeys(e.target.value)}
+                rows={3}
               />
-              <Button size="sm" onClick={handleTranscriptionApiKeySave}>Save</Button>
+              <Button size="sm" className="self-start" onClick={handleTranscriptionApiKeysSave}>Save</Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              For speech-to-text. Get your key at{" "}
-              <a href="https://console.groq.com" className="underline" target="_blank" rel="noreferrer">console.groq.com</a>
+              每行一把 key，多把 key 會自動輪替以避免速率限制。至{" "}
+              <a href="https://console.groq.com" className="underline" target="_blank" rel="noreferrer">console.groq.com</a> 取得
             </p>
           </div>
           <div className="space-y-2">

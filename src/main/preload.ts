@@ -31,7 +31,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Settings
   getBackendSettings: () => ipcRenderer.invoke('settings:getAll'),
-  setTranscriptionApiKey: (key: string) => ipcRenderer.invoke('settings:setTranscriptionApiKey', key),
+  setTranscriptionApiKeys: (keys: string[]) => ipcRenderer.invoke('settings:setTranscriptionApiKeys', keys),
   setGroqApiKey: (key: string) => ipcRenderer.invoke('settings:setGroqApiKey', key),
   setGeminiApiKey: (key: string) => ipcRenderer.invoke('settings:setGeminiApiKey', key),
   transcribe: (projectId: string, model: string) => ipcRenderer.invoke('whisper:transcribe', projectId, model),

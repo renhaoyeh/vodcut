@@ -118,7 +118,7 @@ function uploadToGroq(filePath: string, apiKey: string, model: string, prompt?: 
 export async function transcribeWithGroq(
   projectId: string,
   audioPath: string,
-  apiKey: string,
+  apiKeys: string[],
   model: string,
   win: BrowserWindow | null,
 ): Promise<{ success: boolean; srtPath?: string; segments?: SrtSegment[]; error?: string }> {
@@ -161,7 +161,8 @@ export async function transcribeWithGroq(
         prompt = BASE_PROMPT + ' ' + tail;
       }
 
-      // Upload to Groq
+      // Upload to Groq — rotate API keys across chunks
+      const apiKey = apiKeys[c % apiKeys.length];
       const result = await uploadToGroq(chunkPath, apiKey, model, prompt);
 
       // Clean up temp file
