@@ -35,8 +35,8 @@ export type GroqModel = 'whisper-large-v3' | 'whisper-large-v3-turbo';
 interface SettingsSchema {
   transcriptionApiKey: string;
   transcriptionModel: GroqModel;
-  analysisApiKey: string;
-  analysisModel: string;
+  groqApiKey: string;
+  geminiApiKey: string;
 }
 
 export const settingsStore = new Store<SettingsSchema>({
@@ -44,8 +44,8 @@ export const settingsStore = new Store<SettingsSchema>({
   defaults: {
     transcriptionApiKey: '',
     transcriptionModel: 'whisper-large-v3-turbo',
-    analysisApiKey: '',
-    analysisModel: 'llama-3.3-70b-versatile',
+    groqApiKey: '',
+    geminiApiKey: '',
   },
 });
 

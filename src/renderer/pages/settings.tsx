@@ -15,15 +15,15 @@ import {
 export function SettingsPage() {
   const [transcriptionApiKey, setTranscriptionApiKey] = useState("")
   const [transcriptionModel, setTranscriptionModel] = useState("whisper-large-v3-turbo")
-  const [analysisApiKey, setAnalysisApiKey] = useState("")
-  const [analysisModel, setAnalysisModel] = useState("llama-3.3-70b-versatile")
+  const [groqApiKey, setGroqApiKey] = useState("")
+  const [geminiApiKey, setGeminiApiKey] = useState("")
 
   useEffect(() => {
-    window.electronAPI.getBackendSettings().then((settings) => {
-      setTranscriptionApiKey(settings.transcriptionApiKey)
-      setTranscriptionModel(settings.transcriptionModel)
-      setAnalysisApiKey(settings.analysisApiKey)
-      setAnalysisModel(settings.analysisModel)
+    window.electronAPI.getBackendSettings().then((s) => {
+      setTranscriptionApiKey(s.transcriptionApiKey)
+      setTranscriptionModel(s.transcriptionModel)
+      setGroqApiKey(s.groqApiKey)
+      setGeminiApiKey(s.geminiApiKey)
     })
   }, [])
 
@@ -31,28 +31,25 @@ export function SettingsPage() {
     await window.electronAPI.setTranscriptionApiKey(transcriptionApiKey)
   }, [transcriptionApiKey])
 
-  const handleAnalysisApiKeySave = useCallback(async () => {
-    await window.electronAPI.setAnalysisApiKey(analysisApiKey)
-  }, [analysisApiKey])
-
-  const handleAnalysisModelChange = useCallback(async (value: string) => {
-    setAnalysisModel(value)
-    await window.electronAPI.setAnalysisModel(value)
-  }, [])
-
   const handleTranscriptionModelChange = useCallback(async (value: string) => {
     setTranscriptionModel(value)
     await window.electronAPI.setTranscriptionModel(value)
   }, [])
 
+  const handleGroqApiKeySave = useCallback(async () => {
+    await window.electronAPI.setGroqApiKey(groqApiKey)
+  }, [groqApiKey])
+
+  const handleGeminiApiKeySave = useCallback(async () => {
+    await window.electronAPI.setGeminiApiKey(geminiApiKey)
+  }, [geminiApiKey])
+
   return (
     <div className="flex flex-1 flex-col gap-4 p-4">
       <Card>
         <CardHeader>
-          <CardTitle>Transcription (Groq Cloud API)</CardTitle>
-          <CardDescription>
-            Configure the Groq cloud API for speech recognition.
-          </CardDescription>
+          <CardTitle>Transcription (Groq)</CardTitle>
+          <CardDescription>Groq Whisper API for speech recognition.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -60,19 +57,19 @@ export function SettingsPage() {
             <RadioGroup value={transcriptionModel} onValueChange={handleTranscriptionModelChange}>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="whisper-large-v3-turbo" id="groq-turbo" />
-                <Label htmlFor="groq-turbo" className="font-normal">Large V3 Turbo <span className="text-muted-foreground text-xs">— faster, $0.04/hr</span></Label>
+                <Label htmlFor="groq-turbo" className="font-normal">Large V3 Turbo <span className="text-muted-foreground text-xs">— faster</span></Label>
               </div>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="whisper-large-v3" id="groq-v3" />
-                <Label htmlFor="groq-v3" className="font-normal">Large V3 <span className="text-muted-foreground text-xs">— more accurate, $0.111/hr</span></Label>
+                <Label htmlFor="groq-v3" className="font-normal">Large V3 <span className="text-muted-foreground text-xs">— more accurate</span></Label>
               </div>
             </RadioGroup>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="groq-api-key" className="text-sm">API Key</Label>
+            <Label htmlFor="transcription-api-key" className="text-sm">API Key</Label>
             <div className="flex gap-2">
               <Input
-                id="groq-api-key"
+                id="transcription-api-key"
                 type="password"
                 placeholder="gsk_..."
                 value={transcriptionApiKey}
@@ -81,48 +78,47 @@ export function SettingsPage() {
               <Button size="sm" onClick={handleTranscriptionApiKeySave}>Save</Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Free tier: 28,800 sec/day. Get your key at{" "}
+              Get your key at{" "}
               <a href="https://console.groq.com" className="underline" target="_blank" rel="noreferrer">console.groq.com</a>
             </p>
           </div>
         </CardContent>
       </Card>
+
       <Card>
         <CardHeader>
-          <CardTitle>Analysis (Groq Cloud API)</CardTitle>
-          <CardDescription>
-            Configure a separate Groq API key for content analysis (LLM).
-          </CardDescription>
+          <CardTitle>Analysis API Keys</CardTitle>
+          <CardDescription>Fill in API keys for providers you want to use. Choose which to run from the player page.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-6">
           <div className="space-y-2">
-            <Label className="text-sm">Model</Label>
-            <RadioGroup value={analysisModel} onValueChange={handleAnalysisModelChange}>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="llama-3.3-70b-versatile" id="analysis-llama70b" />
-                <Label htmlFor="analysis-llama70b" className="font-normal">Llama 3.3 70B <span className="text-muted-foreground text-xs">— free, 128k context</span></Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="llama-3.1-8b-instant" id="analysis-llama8b" />
-                <Label htmlFor="analysis-llama8b" className="font-normal">Llama 3.1 8B <span className="text-muted-foreground text-xs">— free, faster, 128k context</span></Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="meta-llama/llama-4-scout-17b-16e-instruct" id="analysis-scout" />
-                <Label htmlFor="analysis-scout" className="font-normal">Llama 4 Scout 17B <span className="text-muted-foreground text-xs">— free, 131k context</span></Label>
-              </div>
-            </RadioGroup>
+            <Label htmlFor="gemini-api-key" className="text-sm">Gemini API Key</Label>
+            <div className="flex gap-2">
+              <Input
+                id="gemini-api-key"
+                type="password"
+                placeholder="AIza..."
+                value={geminiApiKey}
+                onChange={(e) => setGeminiApiKey(e.target.value)}
+              />
+              <Button size="sm" onClick={handleGeminiApiKeySave}>Save</Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Get your key at{" "}
+              <a href="https://aistudio.google.com/apikey" className="underline" target="_blank" rel="noreferrer">aistudio.google.com</a>
+            </p>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="groq-analysis-api-key" className="text-sm">API Key</Label>
+            <Label htmlFor="groq-analysis-api-key" className="text-sm">Groq API Key</Label>
             <div className="flex gap-2">
               <Input
                 id="groq-analysis-api-key"
                 type="password"
                 placeholder="gsk_..."
-                value={analysisApiKey}
-                onChange={(e) => setAnalysisApiKey(e.target.value)}
+                value={groqApiKey}
+                onChange={(e) => setGroqApiKey(e.target.value)}
               />
-              <Button size="sm" onClick={handleAnalysisApiKeySave}>Save</Button>
+              <Button size="sm" onClick={handleGroqApiKeySave}>Save</Button>
             </div>
             <p className="text-xs text-muted-foreground">
               Get your key at{" "}

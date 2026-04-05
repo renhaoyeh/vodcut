@@ -15,16 +15,21 @@ interface ElectronAPI {
   onFfmpegProgress: (callback: (projectId: string, percent: number) => void) => () => void;
 
   // Analyzer
-  analyzeProject: (projectId: string) => Promise<{ success: boolean; data?: AnalysisData; error?: string }>;
+  analyzeProject: (projectId: string, provider: string, model: string) => Promise<{ success: boolean; data?: AnalysisData; error?: string }>;
   getAnalysisData: (projectId: string) => Promise<AnalysisData | null>;
   onAnalyzerStatus: (callback: (projectId: string, status: string) => void) => () => void;
 
   // Settings
-  getBackendSettings: () => Promise<{ transcriptionApiKey: string; transcriptionModel: string; analysisApiKey: string; analysisModel: string }>;
+  getBackendSettings: () => Promise<{
+    transcriptionApiKey: string;
+    transcriptionModel: string;
+    groqApiKey: string;
+    geminiApiKey: string;
+  }>;
   setTranscriptionApiKey: (key: string) => Promise<{ success: boolean }>;
   setTranscriptionModel: (model: string) => Promise<{ success: boolean }>;
-  setAnalysisApiKey: (key: string) => Promise<{ success: boolean }>;
-  setAnalysisModel: (model: string) => Promise<{ success: boolean }>;
+  setGroqApiKey: (key: string) => Promise<{ success: boolean }>;
+  setGeminiApiKey: (key: string) => Promise<{ success: boolean }>;
   transcribe: (projectId: string) => Promise<{ success: boolean; srtPath?: string; error?: string }>;
   readSrt: (projectId: string) => Promise<string | null>;
   onWhisperProgress: (callback: (projectId: string, percent: number) => void) => () => void;

@@ -1,7 +1,16 @@
 import React, { useEffect, useRef, useState, useCallback } from "react"
 import { ArrowLeft, Maximize, Minimize, Pause, Play, Loader2, Sparkles, ListVideo, Scissors, Volume2, VolumeX } from "lucide-react"
 import { Button } from "@/renderer/components/ui/button"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/renderer/components/ui/select"
 import type { AnalysisData } from "@/main/store"
+
+const ANALYSIS_MODELS = [
+  { value: "gemini:gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+  { value: "gemini:gemini-2.0-flash", label: "Gemini 2.0 Flash" },
+  { value: "groq:meta-llama/llama-4-scout-17b-16e-instruct", label: "Llama 4 Scout 17B" },
+  { value: "groq:llama-3.3-70b-versatile", label: "Llama 3.3 70B" },
+  { value: "groq:llama-3.1-8b-instant", label: "Llama 3.1 8B" },
+] as const
 
 // ── SRT parsing ──────────────────────────────────────────────
 
@@ -316,6 +325,7 @@ export function PlayerPage({ projectId, filePath, fileName, onBack }: PlayerPage
   const [analysis, setAnalysis] = useState<AnalysisData | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
   const [analysisError, setAnalysisError] = useState<string | null>(null)
+  const [analysisModelKey, setAnalysisModelKey] = useState("gemini:gemini-2.5-flash")
   const [analysisTab, setAnalysisTab] = useState<"sections" | "clips">("sections")
   const [showPanel, setShowPanel] = useState(false)
 
@@ -346,7 +356,8 @@ export function PlayerPage({ projectId, filePath, fileName, onBack }: PlayerPage
     setAnalyzing(true)
     setAnalysisError(null)
     try {
-      const result = await window.electronAPI.analyzeProject(projectId)
+      const [provider, model] = analysisModelKey.split(":", 2)
+      const result = await window.electronAPI.analyzeProject(projectId, provider, model)
       if (result.success && result.data) {
         setAnalysis(result.data)
         setShowPanel(true)
@@ -360,7 +371,7 @@ export function PlayerPage({ projectId, filePath, fileName, onBack }: PlayerPage
     } finally {
       setAnalyzing(false)
     }
-  }, [projectId])
+  }, [projectId, analysisModelKey])
 
   // Subtitle update + clip boundary check (driven by onTimeUpdate callback)
   const updateSubtitle = useCallback((timeSec: number) => {
@@ -546,10 +557,24 @@ export function PlayerPage({ projectId, filePath, fileName, onBack }: PlayerPage
             </Button>
           )}
           {!analyzing && (
-            <Button variant="outline" size="sm" onClick={handleAnalyze}>
-              <Sparkles className="mr-1 size-4" />
-              {analysis ? "重新分析" : "分析大綱"}
-            </Button>
+            <div className="flex items-center gap-1">
+              <Select value={analysisModelKey} onValueChange={setAnalysisModelKey}>
+                <SelectTrigger className="h-8 w-44 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ANALYSIS_MODELS.map((m) => (
+                    <SelectItem key={m.value} value={m.value} className="text-xs">
+                      {m.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button variant="outline" size="sm" onClick={handleAnalyze}>
+                <Sparkles className="mr-1 size-4" />
+                {analysis ? "重新分析" : "分析大綱"}
+              </Button>
+            </div>
           )}
           {analyzing && (
             <Button variant="outline" size="sm" disabled>

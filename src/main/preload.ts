@@ -21,7 +21,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   // Analyzer
-  analyzeProject: (projectId: string) => ipcRenderer.invoke('analyzer:analyze', projectId),
+  analyzeProject: (projectId: string, provider: string, model: string) => ipcRenderer.invoke('analyzer:analyze', projectId, provider, model),
   getAnalysisData: (projectId: string) => ipcRenderer.invoke('analyzer:getData', projectId),
   onAnalyzerStatus: (callback: (projectId: string, status: string) => void) => {
     const listener = (_event: any, projectId: string, status: string) => callback(projectId, status);
@@ -33,8 +33,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getBackendSettings: () => ipcRenderer.invoke('settings:getAll'),
   setTranscriptionApiKey: (key: string) => ipcRenderer.invoke('settings:setTranscriptionApiKey', key),
   setTranscriptionModel: (model: string) => ipcRenderer.invoke('settings:setTranscriptionModel', model),
-  setAnalysisApiKey: (key: string) => ipcRenderer.invoke('settings:setAnalysisApiKey', key),
-  setAnalysisModel: (model: string) => ipcRenderer.invoke('settings:setAnalysisModel', model),
+  setGroqApiKey: (key: string) => ipcRenderer.invoke('settings:setGroqApiKey', key),
+  setGeminiApiKey: (key: string) => ipcRenderer.invoke('settings:setGeminiApiKey', key),
   transcribe: (projectId: string) => ipcRenderer.invoke('whisper:transcribe', projectId),
   readSrt: (projectId: string) => ipcRenderer.invoke('store:readSrt', projectId),
   onWhisperProgress: (callback: (projectId: string, percent: number) => void) => {

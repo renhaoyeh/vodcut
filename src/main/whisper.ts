@@ -31,18 +31,18 @@ export function registerWhisperHandlers(): void {
     return {
       transcriptionApiKey: settingsStore.get('transcriptionApiKey', ''),
       transcriptionModel: settingsStore.get('transcriptionModel', 'whisper-large-v3-turbo') as GroqModel,
-      analysisApiKey: settingsStore.get('analysisApiKey', ''),
-      analysisModel: settingsStore.get('analysisModel', 'llama-3.3-70b-versatile'),
+      groqApiKey: settingsStore.get('groqApiKey', ''),
+      geminiApiKey: settingsStore.get('geminiApiKey', ''),
     };
   });
 
-  ipcMain.handle('settings:setAnalysisApiKey', (_event, key: string) => {
-    settingsStore.set('analysisApiKey', key);
+  ipcMain.handle('settings:setGroqApiKey', (_event, key: string) => {
+    settingsStore.set('groqApiKey', key);
     return { success: true };
   });
 
-  ipcMain.handle('settings:setAnalysisModel', (_event, model: string) => {
-    settingsStore.set('analysisModel', model);
+  ipcMain.handle('settings:setGeminiApiKey', (_event, key: string) => {
+    settingsStore.set('geminiApiKey', key);
     return { success: true };
   });
 
