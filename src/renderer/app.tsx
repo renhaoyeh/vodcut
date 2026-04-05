@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { createRoot } from "react-dom/client"
 import {
   Film,
@@ -75,18 +75,29 @@ function App() {
   const [currentPage, setCurrentPage] = useState<Page>("projects")
   const [projects, setProjects] = useState<VideoProject[]>([])
 
+  useEffect(() => {
+    window.electronAPI.getProjects().then((stored) => {
+      setProjects(stored.map((p) => ({ ...p, addedAt: new Date(p.addedAt) })))
+    })
+  }, [])
+
   const handleAddProjects = useCallback((newProjects: VideoProject[]) => {
-    setProjects((prev) => [...prev, ...newProjects])
+    const toStore = newProjects.map((p) => ({ ...p, addedAt: p.addedAt.toISOString() }))
+    window.electronAPI.addProjects(toStore).then((stored) => {
+      setProjects(stored.map((p) => ({ ...p, addedAt: new Date(p.addedAt) })))
+    })
   }, [])
 
   const handleRemoveProject = useCallback((id: string) => {
-    setProjects((prev) => prev.filter((p) => p.id !== id))
+    window.electronAPI.removeProject(id).then((stored) => {
+      setProjects(stored.map((p) => ({ ...p, addedAt: new Date(p.addedAt) })))
+    })
   }, [])
 
   const handleConvertToSrt = useCallback((id: string) => {
-    setProjects((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, status: "converting" as const } : p))
-    )
+    window.electronAPI.updateProjectStatus(id, "converting").then((stored) => {
+      setProjects(stored.map((p) => ({ ...p, addedAt: new Date(p.addedAt) })))
+    })
   }, [])
 
   return (
