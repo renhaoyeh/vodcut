@@ -5,6 +5,13 @@ import { Button } from "@/renderer/components/ui/button"
 import { Input } from "@/renderer/components/ui/input"
 import { Label } from "@/renderer/components/ui/label"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/renderer/components/ui/select"
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -16,7 +23,7 @@ import { Settings } from "lucide-react"
 import { toast } from "sonner"
 
 export function SettingsDialog() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [open, setOpen] = useState(false)
   const [transcriptionApiKeys, setTranscriptionApiKeys] = useState("")
   const [groqApiKey, setGroqApiKey] = useState("")
@@ -60,6 +67,18 @@ export function SettingsDialog() {
           <DialogDescription>{t("settings.description")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-5 pt-2">
+          <div className="space-y-2">
+            <Label className="text-sm">{t("settings.languageLabel")}</Label>
+            <Select value={i18n.language} onValueChange={(lng) => i18n.changeLanguage(lng)}>
+              <SelectTrigger className="h-8 w-40 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="zh-TW" className="text-xs">繁體中文</SelectItem>
+                <SelectItem value="en" className="text-xs">English</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="space-y-2">
             <Label htmlFor="transcription-api-keys" className="text-sm">{t("settings.transcriptionLabel")}</Label>
             <div className="flex gap-2">

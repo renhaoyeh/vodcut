@@ -8,9 +8,13 @@ i18n.use(initReactI18next).init({
     "zh-TW": { translation: zhTW },
     en: { translation: en },
   },
-  lng: "zh-TW",
+  lng: localStorage.getItem("language") ?? "zh-TW",
   fallbackLng: "en",
   interpolation: { escapeValue: false },
+})
+
+i18n.on("languageChanged", (lng) => {
+  localStorage.setItem("language", lng)
 })
 
 export default i18n
