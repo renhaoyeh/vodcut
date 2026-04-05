@@ -4,6 +4,7 @@ import { Button } from "@/renderer/components/ui/button"
 import { Separator } from "@/renderer/components/ui/separator"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/renderer/components/ui/select"
 import type { AnalysisData } from "@/main/store"
+import { toast } from "sonner"
 
 const TRANSCRIPTION_MODELS = [
   { value: "whisper-large-v3-turbo", label: "Whisper V3 Turbo" },
@@ -362,7 +363,6 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
   // Transcription state
   const [hasSrt, setHasSrt] = useState(initialHasSrt)
   const [transcribing, setTranscribing] = useState(false)
-  const [transcribeError, setTranscribeError] = useState<string | null>(null)
   const [transcribeStage, setTranscribeStage] = useState("")
   const [transcribeProgress, setTranscribeProgress] = useState(0)
   const [transcriptionModelKey, setTranscriptionModelKey] = useState("whisper-large-v3")
@@ -370,7 +370,6 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
   // Analysis state
   const [analysis, setAnalysis] = useState<AnalysisData | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
-  const [analysisError, setAnalysisError] = useState<string | null>(null)
   const [analysisModelKey, setAnalysisModelKey] = useState("gemini:gemini-2.5-flash")
   const [panelTab, setPanelTab] = useState<"srt" | "sections" | "clips">("srt")
 
@@ -428,14 +427,14 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
 
   const handleTranscribe = useCallback(async () => {
     setTranscribing(true)
-    setTranscribeError(null)
+    // error shown via toast
     setTranscribeStage("轉換音訊中...")
     setTranscribeProgress(0)
     try {
       // Step 1: Extract audio
       const extractResult = await window.electronAPI.extractAudio(projectId)
       if (!extractResult.success) {
-        setTranscribeError(extractResult.error ?? "Audio extraction failed")
+        toast.error(extractResult.error ?? "Audio extraction failed")
         return
       }
       // Step 2: Transcribe
@@ -448,10 +447,10 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
         
         setPanelTab("srt")
       } else {
-        setTranscribeError(result.error ?? "Transcription failed")
+        toast.error(result.error ?? "Transcription failed")
       }
     } catch (err) {
-      setTranscribeError(String(err))
+      toast.error(String(err))
     } finally {
       setTranscribing(false)
     }
@@ -459,7 +458,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
 
   const handleAnalyze = useCallback(async () => {
     setAnalyzing(true)
-    setAnalysisError(null)
+    // error shown via toast
     try {
       const [provider, model] = analysisModelKey.split(":", 2)
       const result = await window.electronAPI.analyzeProject(projectId, provider, model)
@@ -468,11 +467,11 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
         
       } else {
         console.error("[analyzer] failed:", result.error)
-        setAnalysisError(result.error ?? "Unknown error")
+        toast.error(result.error ?? "Unknown error")
       }
     } catch (err) {
       console.error("[analyzer] exception:", err)
-      setAnalysisError(String(err))
+      toast.error(String(err))
     } finally {
       setAnalyzing(false)
     }
@@ -685,11 +684,6 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                 <span className="text-xs text-muted-foreground">{transcribeStage} {transcribeProgress > 0 ? `${transcribeProgress}%` : ""}</span>
               </div>
             )}
-            {transcribeError && (
-              <span className="text-xs text-destructive truncate max-w-48" title={transcribeError}>
-                {transcribeError}
-              </span>
-            )}
           </div>
 
           <Separator orientation="vertical" className="h-5" />
@@ -734,11 +728,6 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                 <Loader2 className="mr-1 size-4 animate-spin" />
                 分析中...
               </Button>
-            )}
-            {analysisError && (
-              <span className="text-xs text-destructive truncate max-w-48" title={analysisError}>
-                {analysisError}
-              </span>
             )}
           </div>
         </div>

@@ -89,6 +89,10 @@ function uploadToGroq(filePath: string, apiKey: string, model: string): Promise<
       res.on('end', () => {
         const text = Buffer.concat(chunks).toString();
         if (res.statusCode !== 200) {
+          try {
+            const err = JSON.parse(text);
+            if (err?.error?.message) { reject(new Error(err.error.message)); return; }
+          } catch { /* fall through */ }
           reject(new Error(`Groq API error (${res.statusCode}): ${text}`));
           return;
         }

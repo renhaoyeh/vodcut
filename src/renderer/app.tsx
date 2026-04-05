@@ -5,6 +5,7 @@ import { Scissors } from "lucide-react"
 import { ProjectsPage, type VideoProject } from "@/renderer/pages/projects"
 import { SettingsDialog } from "@/renderer/pages/settings"
 import { PlayerPage } from "@/renderer/pages/player"
+import { Toaster } from "@/renderer/components/ui/sonner"
 
 function App() {
   const [projects, setProjects] = useState<VideoProject[]>([])
@@ -63,6 +64,7 @@ function App() {
           />
         )}
       </main>
+      <Toaster richColors position="top-center" />
     </div>
   )
 }
