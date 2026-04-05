@@ -1,0 +1,179 @@
+import { BrowserWindow, app } from 'electron';
+import path from 'path';
+import fs from 'fs';
+import https from 'https';
+import crypto from 'crypto';
+import { spawn } from 'child_process';
+import { getProjectById, updateProject } from './store';
+import { type SrtSegment, segmentsToSrt } from './whisper';
+
+const ffmpegPath = path.join(process.cwd(), 'node_modules', 'ffmpeg-static', 'ffmpeg.exe');
+
+// 12 minutes per chunk ≈ 23MB WAV (under 25MB API limit)
+const CHUNK_SEC = 720;
+
+function getAudioDuration(audioPath: string): number {
+  const stat = fs.statSync(audioPath);
+  const pcmBytes = stat.size - 44; // strip WAV header
+  const bytesPerSec = 16000 * 2;  // 16kHz, 16-bit mono
+  return pcmBytes / bytesPerSec;
+}
+
+function extractChunk(audioPath: string, startSec: number, durationSec: number, outPath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(ffmpegPath, [
+      '-i', audioPath,
+      '-ss', String(startSec),
+      '-t', String(durationSec),
+      '-acodec', 'pcm_s16le', '-ar', '16000', '-ac', '1',
+      '-y', outPath,
+    ], { windowsHide: true });
+
+    proc.on('close', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`ffmpeg chunk extract exited with code ${code}`));
+    });
+    proc.on('error', reject);
+  });
+}
+
+interface GroqSegment {
+  start: number;
+  end: number;
+  text: string;
+}
+
+interface GroqResponse {
+  segments: GroqSegment[];
+}
+
+function uploadToGroq(filePath: string, apiKey: string, model: string): Promise<GroqResponse> {
+  const boundary = '----FormBoundary' + crypto.randomBytes(16).toString('hex');
+  const fileData = fs.readFileSync(filePath);
+  const fileName = path.basename(filePath);
+
+  const fields: Array<[string, string]> = [
+    ['model', model],
+    ['language', 'zh'],
+    ['response_format', 'verbose_json'],
+    ['temperature', '0'],
+  ];
+
+  const parts: Buffer[] = [];
+  for (const [key, val] of fields) {
+    parts.push(Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="${key}"\r\n\r\n${val}\r\n`
+    ));
+  }
+  parts.push(Buffer.from(
+    `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${fileName}"\r\nContent-Type: audio/wav\r\n\r\n`
+  ));
+  parts.push(fileData);
+  parts.push(Buffer.from(`\r\n--${boundary}--\r\n`));
+
+  const body = Buffer.concat(parts);
+
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: 'api.groq.com',
+      path: '/openai/v1/audio/transcriptions',
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': `multipart/form-data; boundary=${boundary}`,
+        'Content-Length': body.length,
+      },
+    }, (res) => {
+      const chunks: Buffer[] = [];
+      res.on('data', (chunk) => chunks.push(chunk));
+      res.on('end', () => {
+        const text = Buffer.concat(chunks).toString();
+        if (res.statusCode !== 200) {
+          reject(new Error(`Groq API error (${res.statusCode}): ${text}`));
+          return;
+        }
+        try {
+          resolve(JSON.parse(text) as GroqResponse);
+        } catch {
+          reject(new Error(`Invalid Groq response: ${text}`));
+        }
+      });
+    });
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+export async function transcribeWithGroq(
+  projectId: string,
+  audioPath: string,
+  apiKey: string,
+  model: string,
+  win: BrowserWindow | null,
+): Promise<{ success: boolean; srtPath?: string; segments?: SrtSegment[]; error?: string }> {
+  const project = getProjectById(projectId);
+  if (!project) return { success: false, error: 'Project not found' };
+
+  try {
+    const totalSec = getAudioDuration(audioPath);
+    const numChunks = Math.ceil(totalSec / CHUNK_SEC);
+
+    // Resume from saved progress
+    const saved = project.transcriptionProgress;
+    const allSegments: SrtSegment[] = saved?.segments ?? [];
+    let segIdx = saved?.segIdx ?? 1;
+    let c = saved?.currentChunk ?? 0;
+
+    const tmpDir = app.getPath('temp');
+
+    while (c < numChunks) {
+      const startSec = c * CHUNK_SEC;
+      const duration = Math.min(CHUNK_SEC, totalSec - startSec);
+      const chunkPath = path.join(tmpDir, `vodcut-groq-chunk-${projectId}-${c}.wav`);
+
+      win?.webContents.send('whisper:stage', projectId, `Step 2 辨識中 (${c + 1}/${numChunks})...`);
+      win?.webContents.send('whisper:progress', projectId, Math.round((c / numChunks) * 100));
+
+      // Extract chunk WAV
+      await extractChunk(audioPath, startSec, duration, chunkPath);
+
+      // Upload to Groq
+      const result = await uploadToGroq(chunkPath, apiKey, model);
+
+      // Clean up temp file
+      try { fs.unlinkSync(chunkPath); } catch {}
+
+      const offsetMs = startSec * 1000;
+      for (const seg of result.segments) {
+        allSegments.push({
+          index: segIdx++,
+          startMs: Math.round(seg.start * 1000) + offsetMs,
+          endMs: Math.round(seg.end * 1000) + offsetMs,
+          text: seg.text.trim(),
+        });
+      }
+      c++;
+
+      // Persist progress after each chunk
+      updateProject(projectId, {
+        transcriptionProgress: { currentChunk: c, numChunks, segments: allSegments, segIdx },
+      });
+    }
+
+    win?.webContents.send('whisper:progress', projectId, 100);
+
+    const srtContent = segmentsToSrt(allSegments);
+
+    const videoDir = path.dirname(project.filePath);
+    const videoName = path.basename(project.filePath, path.extname(project.filePath));
+    const srtPath = path.join(videoDir, `${videoName}.srt`);
+    fs.writeFileSync(srtPath, srtContent, 'utf8');
+
+    updateProject(projectId, { status: 'completed', srtPath, transcriptionProgress: undefined });
+
+    return { success: true, srtPath, segments: allSegments };
+  } catch (err) {
+    return { success: false, error: (err as Error).message };
+  }
+}

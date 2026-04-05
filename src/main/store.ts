@@ -21,6 +21,8 @@ export interface StoredProject {
 }
 
 export type WhisperModelSize = 'tiny' | 'base' | 'small' | 'medium' | 'large-v3-turbo';
+export type TranscriptionBackend = 'local' | 'groq';
+export type GroqModel = 'whisper-large-v3' | 'whisper-large-v3-turbo';
 
 export const WHISPER_MODELS: Record<WhisperModelSize, { label: string; size: string; url: string }> = {
   'tiny':             { label: 'Tiny',              size: '75 MB',   url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin' },
@@ -33,12 +35,18 @@ export const WHISPER_MODELS: Record<WhisperModelSize, { label: string; size: str
 interface StoreSchema {
   projects: StoredProject[];
   whisperModel: WhisperModelSize;
+  transcriptionBackend: TranscriptionBackend;
+  groqApiKey: string;
+  groqModel: GroqModel;
 }
 
-const store = new Store<StoreSchema>({
+export const store = new Store<StoreSchema>({
   defaults: {
     projects: [],
     whisperModel: 'base',
+    transcriptionBackend: 'local',
+    groqApiKey: '',
+    groqModel: 'whisper-large-v3-turbo',
   },
 });
 

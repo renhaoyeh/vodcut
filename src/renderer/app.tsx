@@ -101,12 +101,20 @@ function App() {
   }, [syncProjects])
 
   const handleConvertToSrt = useCallback(async (id: string) => {
-    // Check if model is downloaded
-    const modelInfo = await window.electronAPI.getModelInfo()
-    const selected = modelInfo.models.find((m) => m.selected)
-    if (!selected?.downloaded) {
-      setCurrentPage("settings")
-      return
+    // Check backend readiness
+    const backendSettings = await window.electronAPI.getBackendSettings()
+    if (backendSettings.backend === "local") {
+      const modelInfo = await window.electronAPI.getModelInfo()
+      const selected = modelInfo.models.find((m) => m.selected)
+      if (!selected?.downloaded) {
+        setCurrentPage("settings")
+        return
+      }
+    } else if (backendSettings.backend === "groq") {
+      if (!backendSettings.groqApiKey) {
+        setCurrentPage("settings")
+        return
+      }
     }
 
     await window.electronAPI.updateProjectStatus(id, "converting").then(syncProjects)

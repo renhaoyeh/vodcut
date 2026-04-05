@@ -3,16 +3,14 @@ import { ipcMain, BrowserWindow, app } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import https from 'https';
-import { getProjectById, updateProject, WHISPER_MODELS, type WhisperModelSize, type TranscriptionProgress } from './store';
-import Store from 'electron-store';
+import { getProjectById, updateProject, WHISPER_MODELS, store, type WhisperModelSize, type TranscriptionProgress, type TranscriptionBackend, type GroqModel } from './store';
+import { transcribeWithGroq } from './groq';
 
 type WhisperContext = Awaited<ReturnType<typeof initWhisper>>;
 
 let context: WhisperContext | null = null;
 let loadedModelPath: string | null = null;
 let gpuBackend: string = 'unknown';
-
-const store = new Store();
 
 function getModelsDir(): string {
   const dir = path.join(app.getPath('userData'), 'models');
@@ -136,7 +134,7 @@ function formatTimestamp(ms: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')},${String(milli).padStart(3, '0')}`;
 }
 
-function segmentsToSrt(segments: SrtSegment[]): string {
+export function segmentsToSrt(segments: SrtSegment[]): string {
   return segments
     .map((seg) =>
       `${seg.index}\n${formatTimestamp(seg.startMs)} --> ${formatTimestamp(seg.endMs)}\n${seg.text}\n`
@@ -180,6 +178,29 @@ export function registerWhisperHandlers(): void {
     }
   });
 
+  ipcMain.handle('whisper:getBackendSettings', () => {
+    return {
+      backend: store.get('transcriptionBackend', 'local') as TranscriptionBackend,
+      groqApiKey: store.get('groqApiKey', ''),
+      groqModel: store.get('groqModel', 'whisper-large-v3-turbo') as GroqModel,
+    };
+  });
+
+  ipcMain.handle('whisper:setBackend', (_event, backend: TranscriptionBackend) => {
+    store.set('transcriptionBackend', backend);
+    return { success: true };
+  });
+
+  ipcMain.handle('whisper:setGroqApiKey', (_event, key: string) => {
+    store.set('groqApiKey', key);
+    return { success: true };
+  });
+
+  ipcMain.handle('whisper:setGroqModel', (_event, model: GroqModel) => {
+    store.set('groqModel', model);
+    return { success: true };
+  });
+
   ipcMain.handle('whisper:transcribe', async (event, projectId: string) => {
     const project = getProjectById(projectId);
     if (!project) {
@@ -190,6 +211,17 @@ export function registerWhisperHandlers(): void {
     }
     if (!fs.existsSync(project.audioPath)) {
       return { success: false, error: `Audio file not found: ${project.audioPath}` };
+    }
+
+    const backend = store.get('transcriptionBackend', 'local') as TranscriptionBackend;
+    if (backend === 'groq') {
+      const apiKey = store.get('groqApiKey', '') as string;
+      if (!apiKey) {
+        return { success: false, error: 'Groq API key not configured. Set it in Settings.' };
+      }
+      const groqModel = store.get('groqModel', 'whisper-large-v3-turbo') as GroqModel;
+      const win = BrowserWindow.fromWebContents(event.sender);
+      return transcribeWithGroq(projectId, project.audioPath!, apiKey, groqModel, win);
     }
 
     const selectedModel = store.get('whisperModel', 'base') as WhisperModelSize;

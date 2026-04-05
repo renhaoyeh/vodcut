@@ -26,6 +26,10 @@ interface ElectronAPI {
   // Whisper
   getModelInfo: () => Promise<{ models: ModelInfo[]; selectedModel: string; modelsDir: string; gpuBackend: string }>;
   selectModel: (modelSize: string) => Promise<{ success: boolean }>;
+  getBackendSettings: () => Promise<{ backend: string; groqApiKey: string; groqModel: string }>;
+  setBackend: (backend: string) => Promise<{ success: boolean }>;
+  setGroqApiKey: (key: string) => Promise<{ success: boolean }>;
+  setGroqModel: (model: string) => Promise<{ success: boolean }>;
   downloadModel: (modelSize: string) => Promise<{ success: boolean; error?: string }>;
   transcribe: (projectId: string) => Promise<{ success: boolean; srtPath?: string; error?: string }>;
   pauseTranscription: (projectId: string) => Promise<void>;

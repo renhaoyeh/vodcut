@@ -3,6 +3,9 @@ import { Download, Check, Loader2 } from "lucide-react"
 
 import { Button } from "@/renderer/components/ui/button"
 import { Badge } from "@/renderer/components/ui/badge"
+import { Input } from "@/renderer/components/ui/input"
+import { RadioGroup, RadioGroupItem } from "@/renderer/components/ui/radio-group"
+import { Label } from "@/renderer/components/ui/label"
 import {
   Card,
   CardContent,
@@ -24,6 +27,9 @@ export function SettingsPage() {
   const [modelsDir, setModelsDir] = useState("")
   const [gpuBackend, setGpuBackend] = useState("unknown")
   const [downloading, setDownloading] = useState<Record<string, number>>({})
+  const [backend, setBackend] = useState("local")
+  const [groqApiKey, setGroqApiKey] = useState("")
+  const [groqModel, setGroqModel] = useState("whisper-large-v3-turbo")
 
   const loadModels = useCallback(() => {
     window.electronAPI.getModelInfo().then((info) => {
@@ -33,9 +39,18 @@ export function SettingsPage() {
     })
   }, [])
 
+  const loadBackendSettings = useCallback(() => {
+    window.electronAPI.getBackendSettings().then((settings) => {
+      setBackend(settings.backend)
+      setGroqApiKey(settings.groqApiKey)
+      setGroqModel(settings.groqModel)
+    })
+  }, [])
+
   useEffect(() => {
     loadModels()
-  }, [loadModels])
+    loadBackendSettings()
+  }, [loadModels, loadBackendSettings])
 
   useEffect(() => {
     const cleanup = window.electronAPI.onDownloadProgress((modelSize, percent) => {
@@ -62,9 +77,81 @@ export function SettingsPage() {
     loadModels()
   }, [loadModels])
 
+  const handleBackendChange = useCallback(async (value: string) => {
+    setBackend(value)
+    await window.electronAPI.setBackend(value)
+  }, [])
+
+  const handleApiKeySave = useCallback(async () => {
+    await window.electronAPI.setGroqApiKey(groqApiKey)
+  }, [groqApiKey])
+
+  const handleGroqModelChange = useCallback(async (value: string) => {
+    setGroqModel(value)
+    await window.electronAPI.setGroqModel(value)
+  }, [])
+
   return (
     <div className="flex flex-1 flex-col gap-4 p-4">
+      {/* Backend Selection */}
       <Card>
+        <CardHeader>
+          <CardTitle>Transcription Backend</CardTitle>
+          <CardDescription>
+            Choose between local Whisper model or Groq cloud API.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <RadioGroup value={backend} onValueChange={handleBackendChange}>
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="local" id="backend-local" />
+              <Label htmlFor="backend-local">Local (Whisper)</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="groq" id="backend-groq" />
+              <Label htmlFor="backend-groq">Groq Cloud API</Label>
+            </div>
+          </RadioGroup>
+
+          {backend === "groq" && (
+            <div className="mt-4 space-y-4">
+              <div className="space-y-2">
+                <Label className="text-sm">Model</Label>
+                <RadioGroup value={groqModel} onValueChange={handleGroqModelChange}>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="whisper-large-v3-turbo" id="groq-turbo" />
+                    <Label htmlFor="groq-turbo" className="font-normal">Large V3 Turbo <span className="text-muted-foreground text-xs">— faster, $0.04/hr</span></Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="whisper-large-v3" id="groq-v3" />
+                    <Label htmlFor="groq-v3" className="font-normal">Large V3 <span className="text-muted-foreground text-xs">— more accurate, $0.111/hr</span></Label>
+                  </div>
+                </RadioGroup>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="groq-api-key" className="text-sm">API Key</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="groq-api-key"
+                    type="password"
+                    placeholder="gsk_..."
+                    value={groqApiKey}
+                    onChange={(e) => setGroqApiKey(e.target.value)}
+                  />
+                  <Button size="sm" onClick={handleApiKeySave}>Save</Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Free tier: 28,800 sec/day. Get your key at{" "}
+                  <a href="https://console.groq.com" className="underline" target="_blank" rel="noreferrer">console.groq.com</a>
+                </p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Local Whisper Model */}
+      <Card className={backend !== "local" ? "opacity-50" : ""}>
         <CardHeader>
           <CardTitle>Whisper Model</CardTitle>
           <CardDescription>
