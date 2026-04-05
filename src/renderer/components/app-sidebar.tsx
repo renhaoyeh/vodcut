@@ -2,7 +2,6 @@ import {
   LayoutDashboard,
   FolderOpen,
   Settings,
-  HelpCircle,
   Scissors,
 } from "lucide-react"
 
@@ -21,7 +20,7 @@ import {
   SidebarSeparator,
 } from "@/renderer/components/ui/sidebar"
 
-export type Page = "dashboard" | "projects"
+export type Page = "dashboard" | "projects" | "settings"
 
 const mainNav = [
   { title: "Dashboard", icon: LayoutDashboard, page: "dashboard" as Page },
@@ -29,8 +28,7 @@ const mainNav = [
 ]
 
 const secondaryNav = [
-  { title: "Settings", icon: Settings },
-  { title: "Help", icon: HelpCircle },
+  { title: "Settings", icon: Settings, page: "settings" as Page },
 ]
 
 interface AppSidebarProps {
@@ -82,7 +80,11 @@ export function AppSidebar({ currentPage, onNavigate }: AppSidebarProps) {
         <SidebarMenu>
           {secondaryNav.map((item) => (
             <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton tooltip={item.title}>
+              <SidebarMenuButton
+                isActive={currentPage === item.page}
+                tooltip={item.title}
+                onClick={() => onNavigate(item.page)}
+              >
                 <item.icon />
                 <span>{item.title}</span>
               </SidebarMenuButton>

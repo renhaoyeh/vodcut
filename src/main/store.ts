@@ -6,17 +6,30 @@ export interface StoredProject {
   fileName: string;
   filePath: string;
   audioPath?: string;
+  srtPath?: string;
   addedAt: string;
   status: 'imported' | 'converting' | 'completed';
 }
 
+export type WhisperModelSize = 'tiny' | 'base' | 'small' | 'medium' | 'large-v3-turbo';
+
+export const WHISPER_MODELS: Record<WhisperModelSize, { label: string; size: string; url: string }> = {
+  'tiny':             { label: 'Tiny',              size: '75 MB',   url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin' },
+  'base':             { label: 'Base',              size: '142 MB',  url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin' },
+  'small':            { label: 'Small',             size: '466 MB',  url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin' },
+  'medium':           { label: 'Medium',            size: '1.5 GB',  url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin' },
+  'large-v3-turbo':   { label: 'Large V3 Turbo',    size: '1.6 GB',  url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin' },
+};
+
 interface StoreSchema {
   projects: StoredProject[];
+  whisperModel: WhisperModelSize;
 }
 
 const store = new Store<StoreSchema>({
   defaults: {
     projects: [],
+    whisperModel: 'base',
   },
 });
 

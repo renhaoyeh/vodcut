@@ -17,32 +17,13 @@ import {
 } from "@/renderer/components/ui/card"
 import { AppSidebar, type Page } from "@/renderer/components/app-sidebar"
 import { ProjectsPage, type VideoProject } from "@/renderer/pages/projects"
+import { SettingsPage } from "@/renderer/pages/settings"
 
 const stats = [
-  {
-    title: "Total Projects",
-    value: "12",
-    description: "3 in progress",
-    icon: Film,
-  },
-  {
-    title: "Editing Hours",
-    value: "48.5",
-    description: "+12% from last week",
-    icon: Clock,
-  },
-  {
-    title: "Storage Used",
-    value: "24.3 GB",
-    description: "of 100 GB",
-    icon: HardDrive,
-  },
-  {
-    title: "Exports",
-    value: "36",
-    description: "+8 this week",
-    icon: TrendingUp,
-  },
+  { title: "Total Projects", value: "12", description: "3 in progress", icon: Film },
+  { title: "Editing Hours", value: "48.5", description: "+12% from last week", icon: Clock },
+  { title: "Storage Used", value: "24.3 GB", description: "of 100 GB", icon: HardDrive },
+  { title: "Exports", value: "36", description: "+8 this week", icon: TrendingUp },
 ]
 
 function Dashboard() {
@@ -69,11 +50,13 @@ function Dashboard() {
 const pageTitle: Record<Page, string> = {
   dashboard: "Dashboard",
   projects: "Projects",
+  settings: "Settings",
 }
 
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>("projects")
   const [projects, setProjects] = useState<VideoProject[]>([])
+  const [progress, setProgress] = useState<Record<string, number>>({})
 
   const syncProjects = useCallback((stored: any[]) => {
     setProjects(stored.map((p) => ({ ...p, addedAt: new Date(p.addedAt) })))
@@ -83,15 +66,15 @@ function App() {
     window.electronAPI.getProjects().then(syncProjects)
   }, [syncProjects])
 
-  // Listen for ffmpeg progress
   useEffect(() => {
-    const cleanup = window.electronAPI.onFfmpegProgress((projectId, percent) => {
+    const c1 = window.electronAPI.onFfmpegProgress((projectId, percent) => {
       setProgress((prev) => ({ ...prev, [projectId]: percent }))
     })
-    return cleanup
+    const c2 = window.electronAPI.onWhisperProgress((projectId, percent) => {
+      setProgress((prev) => ({ ...prev, [projectId]: percent }))
+    })
+    return () => { c1(); c2() }
   }, [])
-
-  const [progress, setProgress] = useState<Record<string, number>>({})
 
   const handleAddProjects = useCallback((newProjects: VideoProject[]) => {
     const toStore = newProjects.map((p) => ({ ...p, addedAt: p.addedAt.toISOString() }))
@@ -103,21 +86,35 @@ function App() {
   }, [syncProjects])
 
   const handleConvertToSrt = useCallback(async (id: string) => {
+    // Check if model is downloaded
+    const modelInfo = await window.electronAPI.getModelInfo()
+    const selected = modelInfo.models.find((m) => m.selected)
+    if (!selected?.downloaded) {
+      setCurrentPage("settings")
+      return
+    }
+
     await window.electronAPI.updateProjectStatus(id, "converting").then(syncProjects)
     setProgress((prev) => ({ ...prev, [id]: 0 }))
 
-    const result = await window.electronAPI.extractAudio(id)
-    if (!result.success) {
+    // Step 1: Extract audio
+    const extractResult = await window.electronAPI.extractAudio(id)
+    if (!extractResult.success) {
+      await window.electronAPI.updateProjectStatus(id, "imported").then(syncProjects)
+      setProgress((prev) => { const n = { ...prev }; delete n[id]; return n })
+      return
+    }
+
+    // Step 2: Transcribe with Whisper
+    setProgress((prev) => ({ ...prev, [id]: 0 }))
+    const transcribeResult = await window.electronAPI.transcribe(id)
+    if (!transcribeResult.success) {
       await window.electronAPI.updateProjectStatus(id, "imported").then(syncProjects)
     }
-    // success: store already updated by main process
+
     await window.electronAPI.getProjects().then(syncProjects)
-    setProgress((prev) => {
-      const next = { ...prev }
-      delete next[id]
-      return next
-    })
-  }, [projects, syncProjects])
+    setProgress((prev) => { const n = { ...prev }; delete n[id]; return n })
+  }, [syncProjects])
 
   return (
     <SidebarProvider>
@@ -138,6 +135,7 @@ function App() {
             onConvertToSrt={handleConvertToSrt}
           />
         )}
+        {currentPage === "settings" && <SettingsPage />}
       </SidebarInset>
     </SidebarProvider>
   )
