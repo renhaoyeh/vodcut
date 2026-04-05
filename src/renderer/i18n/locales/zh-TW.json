@@ -38,6 +38,7 @@
     "analyzeNoSrt": "請先轉錄",
     "noKey": "（無金鑰）",
     "tabSubtitles": "字幕 ({{count}})",
+    "tabAnalysis": "分析",
     "tabSections": "段落 ({{count}})",
     "tabClips": "剪輯建議 ({{count}})",
     "playingClickToCancel": "播放中 · 點擊取消",

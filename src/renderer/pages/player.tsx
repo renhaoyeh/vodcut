@@ -377,7 +377,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
   const [analysis, setAnalysis] = useState<AnalysisData | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
   const [analysisModelKey, setAnalysisModelKey] = useState("gemini:gemini-2.5-flash")
-  const [panelTab, setPanelTab] = useState<"srt" | "sections" | "clips">("srt")
+  const [panelTab, setPanelTab] = useState<"srt" | "analysis">("srt")
 
   // API key availability
   const [hasTranscriptionKey, setHasTranscriptionKey] = useState(false)
@@ -830,116 +830,129 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                 </button>
               )}
               {analysis && (
-                <>
-                  <button
-                    className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
-                      panelTab === "sections"
-                        ? "border-b-2 border-primary text-primary"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                    onClick={() => { setPanelTab("sections"); setActiveClip(null) }}
-                  >
-                    <ListVideo className="mr-1 inline size-3.5" />
-                    {t("player.tabSections", { count: analysis.sections.length })}
-                  </button>
-                  <button
-                    className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
-                      panelTab === "clips"
-                        ? "border-b-2 border-primary text-primary"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                    onClick={() => setPanelTab("clips")}
-                  >
-                    <Scissors className="mr-1 inline size-3.5" />
-                    {t("player.tabClips", { count: analysis.clips.length })}
-                  </button>
-                </>
+                <button
+                  className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+                    panelTab === "analysis"
+                      ? "border-b-2 border-primary text-primary"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  onClick={() => { setPanelTab("analysis"); setActiveClip(null) }}
+                >
+                  <Sparkles className="mr-1 inline size-3.5" />
+                  {t("player.tabAnalysis")}
+                </button>
               )}
             </div>
 
-            <div className="flex-1 overflow-y-auto">
-              {panelTab === "srt" && subtitles.map((sub, i) => {
-                const active = currentMs >= sub.startMs && currentMs < sub.endMs
-                return (
-                  <div
-                    key={i}
-                    className={`border-b px-3 py-2 transition-colors hover:bg-accent cursor-pointer ${
-                      active ? "bg-accent/50 border-l-2 border-l-primary" : ""
-                    }`}
-                    onClick={() => seekToMs(sub.startMs)}
-                  >
-                    <span className="text-[10px] tabular-nums text-muted-foreground">
-                      {formatMs(sub.startMs)} – {formatMs(sub.endMs)}
-                    </span>
-                    <textarea
-                      className="mt-0.5 w-full resize-none bg-transparent text-sm outline-none focus:ring-1 focus:ring-primary/50 rounded px-1"
-                      rows={1}
-                      value={sub.text}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) => {
-                        const updated = [...subtitles]
-                        updated[i] = { ...updated[i], text: e.target.value }
-                        setSubtitles(updated)
-                      }}
-                      onBlur={() => {
-                        window.electronAPI.saveSrt(projectId, subtitlesToSrt(subtitles))
-                      }}
-                    />
+            {panelTab === "srt" && (
+              <div className="flex-1 overflow-y-auto">
+                {subtitles.map((sub, i) => {
+                  const active = currentMs >= sub.startMs && currentMs < sub.endMs
+                  return (
+                    <div
+                      key={i}
+                      className={`border-b px-3 py-2 transition-colors hover:bg-accent cursor-pointer ${
+                        active ? "bg-accent/50 border-l-2 border-l-primary" : ""
+                      }`}
+                      onClick={() => seekToMs(sub.startMs)}
+                    >
+                      <span className="text-[10px] tabular-nums text-muted-foreground">
+                        {formatMs(sub.startMs)} – {formatMs(sub.endMs)}
+                      </span>
+                      <textarea
+                        className="mt-0.5 w-full resize-none bg-transparent text-sm outline-none focus:ring-1 focus:ring-primary/50 rounded px-1"
+                        rows={1}
+                        value={sub.text}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => {
+                          const updated = [...subtitles]
+                          updated[i] = { ...updated[i], text: e.target.value }
+                          setSubtitles(updated)
+                        }}
+                        onBlur={() => {
+                          window.electronAPI.saveSrt(projectId, subtitlesToSrt(subtitles))
+                        }}
+                      />
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {panelTab === "analysis" && analysis && (
+              <ResizablePanelGroup orientation="vertical" className="flex-1">
+                <ResizablePanel defaultSize={50} minSize={20}>
+                  <div className="flex h-full flex-col">
+                    <div className="flex items-center gap-1 border-b px-3 py-1.5">
+                      <ListVideo className="size-3.5 text-muted-foreground" />
+                      <span className="text-xs font-medium text-muted-foreground">{t("player.tabSections", { count: analysis.sections.length })}</span>
+                    </div>
+                    <div className="flex-1 overflow-y-auto">
+                      {analysis.sections.map((sec, i) => {
+                        const active = currentMs >= sec.startMs && currentMs < sec.endMs
+                        return (
+                          <button
+                            key={i}
+                            className={`w-full border-b px-3 py-2.5 text-left transition-colors hover:bg-accent ${
+                              active ? "bg-accent/50 border-l-2 border-l-primary" : ""
+                            }`}
+                            onClick={() => seekToMs(sec.startMs)}
+                          >
+                            <div className="flex items-baseline gap-2">
+                              <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+                                {formatMs(sec.startMs)}
+                              </span>
+                              <span className="text-sm font-medium">{sec.title}</span>
+                            </div>
+                            <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{sec.summary}</p>
+                          </button>
+                        )
+                      })}
+                    </div>
                   </div>
-                )
-              })}
-
-              {panelTab === "sections" && analysis?.sections.map((sec, i) => {
-                const active = currentMs >= sec.startMs && currentMs < sec.endMs
-                return (
-                  <button
-                    key={i}
-                    className={`w-full border-b px-3 py-2.5 text-left transition-colors hover:bg-accent ${
-                      active ? "bg-accent/50 border-l-2 border-l-primary" : ""
-                    }`}
-                    onClick={() => seekToMs(sec.startMs)}
-                  >
-                    <div className="flex items-baseline gap-2">
-                      <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
-                        {formatMs(sec.startMs)}
-                      </span>
-                      <span className="text-sm font-medium">{sec.title}</span>
+                </ResizablePanel>
+                <ResizableHandle withHandle orientation="vertical" />
+                <ResizablePanel defaultSize={50} minSize={20}>
+                  <div className="flex h-full flex-col">
+                    <div className="flex items-center gap-1 border-b px-3 py-1.5">
+                      <Scissors className="size-3.5 text-muted-foreground" />
+                      <span className="text-xs font-medium text-muted-foreground">{t("player.tabClips", { count: analysis.clips.length })}</span>
                     </div>
-                    <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{sec.summary}</p>
-                  </button>
-                )
-              })}
-
-              {panelTab === "clips" && analysis?.clips.map((clip, i) => {
-                const isActive = activeClip?.startMs === clip.startMs && activeClip?.endMs === clip.endMs
-                return (
-                  <button
-                    key={i}
-                    className={`w-full border-b px-3 py-2.5 text-left transition-colors hover:bg-accent ${
-                      isActive ? "bg-accent/50 border-l-2 border-l-primary" : ""
-                    }`}
-                    onClick={() => {
-                      if (isActive) {
-                        clearClip()
-                      } else {
-                        playClip(clip.startMs, clip.endMs)
-                      }
-                    }}
-                  >
-                    <div className="flex items-baseline gap-2">
-                      <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
-                        {formatMs(clip.startMs)} – {formatMs(clip.endMs)}
-                      </span>
-                      {isActive && (
-                        <span className="text-[10px] text-primary">{t("player.playingClickToCancel")}</span>
-                      )}
+                    <div className="flex-1 overflow-y-auto">
+                      {analysis.clips.map((clip, i) => {
+                        const isActive = activeClip?.startMs === clip.startMs && activeClip?.endMs === clip.endMs
+                        return (
+                          <button
+                            key={i}
+                            className={`w-full border-b px-3 py-2.5 text-left transition-colors hover:bg-accent ${
+                              isActive ? "bg-accent/50 border-l-2 border-l-primary" : ""
+                            }`}
+                            onClick={() => {
+                              if (isActive) {
+                                clearClip()
+                              } else {
+                                playClip(clip.startMs, clip.endMs)
+                              }
+                            }}
+                          >
+                            <div className="flex items-baseline gap-2">
+                              <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+                                {formatMs(clip.startMs)} – {formatMs(clip.endMs)}
+                              </span>
+                              {isActive && (
+                                <span className="text-[10px] text-primary">{t("player.playingClickToCancel")}</span>
+                              )}
+                            </div>
+                            <p className="mt-0.5 text-sm font-medium">{clip.title}</p>
+                            <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{clip.reason}</p>
+                          </button>
+                        )
+                      })}
                     </div>
-                    <p className="mt-0.5 text-sm font-medium">{clip.title}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{clip.reason}</p>
-                  </button>
-                )
-              })}
-            </div>
+                  </div>
+                </ResizablePanel>
+              </ResizablePanelGroup>
+            )}
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>

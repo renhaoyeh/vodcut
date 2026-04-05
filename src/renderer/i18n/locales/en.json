@@ -38,6 +38,7 @@
     "analyzeNoSrt": "Please transcribe first",
     "noKey": " (no key)",
     "tabSubtitles": "Subtitles ({{count}})",
+    "tabAnalysis": "Analysis",
     "tabSections": "Sections ({{count}})",
     "tabClips": "Clip suggestions ({{count}})",
     "playingClickToCancel": "Playing · Click to cancel",
