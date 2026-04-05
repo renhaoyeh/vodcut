@@ -48,7 +48,7 @@ export function SettingsDialog() {
           <Settings className="size-4" />
         </button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>API keys for transcription and analysis services.</DialogDescription>
