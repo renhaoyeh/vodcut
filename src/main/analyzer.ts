@@ -29,7 +29,7 @@ const SYSTEM_PROMPT = `你是一位專業的影片剪輯顧問。使用者會給
 規則：
 - sections 是整支影片的段落大綱，應連續且不重疊，涵蓋整部影片
 - clips 是推薦剪成 YouTube 短片的片段，可與 sections 重疊
-- 時間一律用毫秒 (ms) 表示，從 SRT 時間戳記換算
+- **時間精準度**：startMs 和 endMs 必須取自 SRT 中實際出現的字幕時間戳（換算成毫秒）。找到主題轉換處最近的那條字幕，用它的開始時間作為 startMs 或結束時間作為 endMs。絕對不要自己湊整數或估算
 - title 和 summary 請用繁體中文
 - 只回傳 JSON，不要有任何其他文字`;
 
@@ -125,15 +125,11 @@ export function registerAnalyzerHandlers(): void {
 
     try {
       win?.webContents.send('analyzer:status', projectId, 'analyzing');
-      console.log('[analyzer] Starting analysis for project:', projectId);
-      console.log('[analyzer] SRT path:', project.srtPath);
 
       const srtContent = fs.readFileSync(project.srtPath, 'utf8');
       const prompt = `${SYSTEM_PROMPT}\n\n以下是逐字稿內容：\n\n${srtContent}`;
 
-      console.log('[analyzer] Calling claude CLI...');
       const output = await runClaude(prompt);
-      console.log('[analyzer] Claude response length:', output.length);
       const analysisData = parseAnalysisResponse(output);
 
       // Save JSON file next to the video
@@ -147,7 +143,6 @@ export function registerAnalyzerHandlers(): void {
       win?.webContents.send('analyzer:status', projectId, 'done');
       return { success: true, data: analysisData };
     } catch (err) {
-      console.error('[analyzer] Error:', (err as Error).message);
       win?.webContents.send('analyzer:status', projectId, 'error');
       return { success: false, error: (err as Error).message };
     }

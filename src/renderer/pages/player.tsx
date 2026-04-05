@@ -537,16 +537,16 @@ export function PlayerPage({ projectId, filePath, fileName, onBack }: PlayerPage
             <ArrowLeft className="size-4" />
           </Button>
           <span className="flex-1 truncate text-sm font-medium">{fileName}</span>
-          {analysis && (
+          {analysis && !analyzing && (
             <Button variant="ghost" size="sm" onClick={() => setShowPanel(!showPanel)}>
               <ListVideo className="mr-1 size-4" />
               大綱
             </Button>
           )}
-          {!analysis && !analyzing && (
+          {!analyzing && (
             <Button variant="outline" size="sm" onClick={handleAnalyze}>
               <Sparkles className="mr-1 size-4" />
-              分析大綱
+              {analysis ? "重新分析" : "分析大綱"}
             </Button>
           )}
           {analyzing && (
