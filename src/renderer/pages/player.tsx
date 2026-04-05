@@ -366,7 +366,10 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
   const [duration, setDuration] = useState(0)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [showControls, setShowControls] = useState(true)
-  const [volume, setVolume] = useState(1)
+  const [volume, setVolume] = useState(() => {
+    const saved = localStorage.getItem("volume")
+    return saved !== null ? parseFloat(saved) : 0.6
+  })
 
   // Transcription state
   const [hasSrt, setHasSrt] = useState(initialHasSrt)
@@ -520,6 +523,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
     const video = e.currentTarget
     setDuration(video.duration)
     video.currentTime = 0
+    video.volume = volume
     video.pause()
     allowPlaybackRef.current = false
     currentTimeRef.current = 0
@@ -580,6 +584,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
 
   const handleVolumeChange = useCallback((v: number) => {
     setVolume(v)
+    localStorage.setItem("volume", String(v))
     if (videoRef.current) videoRef.current.volume = v
   }, [])
 
