@@ -845,6 +845,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                   return (
                     <div
                       key={i}
+                      ref={active ? (el) => { el?.scrollIntoView({ block: "nearest", behavior: "smooth" }) } : undefined}
                       className={`border-b px-3 py-2 transition-colors hover:bg-accent cursor-pointer ${
                         active ? "bg-accent/50 border-l-2 border-l-primary" : ""
                       }`}
