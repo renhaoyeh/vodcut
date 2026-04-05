@@ -162,7 +162,9 @@ export async function transcribeWithGroq(
       }
 
       // Upload to Groq — rotate API keys across chunks
-      const apiKey = apiKeys[c % apiKeys.length];
+      const keyIndex = c % apiKeys.length;
+      const apiKey = apiKeys[keyIndex];
+      console.log(`[whisper] chunk ${c + 1}/${numChunks} using key #${keyIndex + 1}`);
       const result = await uploadToGroq(chunkPath, apiKey, model, prompt);
 
       // Clean up temp file
