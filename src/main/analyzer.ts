@@ -2,7 +2,7 @@ import { ipcMain, BrowserWindow } from 'electron';
 import https from 'https';
 import fs from 'fs';
 import path from 'path';
-import { getProjectById, updateProject, store } from './store';
+import { getProjectById, updateProject, settingsStore } from './store';
 
 const SYSTEM_PROMPT = `你是一位專業的影片剪輯顧問。使用者會給你一段影片的逐字稿（SRT 格式，含時間戳記），
 請你分析內容並以 **純 JSON** 回傳（不要加 markdown code fence），格式如下：
@@ -53,7 +53,7 @@ export interface AnalysisData {
 }
 
 function callGroqChat(systemPrompt: string, userMessage: string): Promise<string> {
-  const apiKey = store.get('groqAnalysisApiKey', '') as string;
+  const apiKey = settingsStore.get('analysisApiKey', '') as string;
   if (!apiKey) {
     return Promise.reject(new Error('Groq Analysis API key not set. Please configure it in Settings.'));
   }

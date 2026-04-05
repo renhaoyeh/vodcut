@@ -1,6 +1,6 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import fs from 'fs';
-import { getProjectById, store, type GroqModel } from './store';
+import { getProjectById, settingsStore, type GroqModel } from './store';
 import { transcribeWithGroq } from './groq';
 
 export interface SrtSegment {
@@ -27,26 +27,26 @@ export function segmentsToSrt(segments: SrtSegment[]): string {
 }
 
 export function registerWhisperHandlers(): void {
-  ipcMain.handle('whisper:getBackendSettings', () => {
+  ipcMain.handle('settings:getAll', () => {
     return {
-      groqApiKey: store.get('groqApiKey', ''),
-      groqModel: store.get('groqModel', 'whisper-large-v3-turbo') as GroqModel,
-      groqAnalysisApiKey: store.get('groqAnalysisApiKey', ''),
+      transcriptionApiKey: settingsStore.get('transcriptionApiKey', ''),
+      transcriptionModel: settingsStore.get('transcriptionModel', 'whisper-large-v3-turbo') as GroqModel,
+      analysisApiKey: settingsStore.get('analysisApiKey', ''),
     };
   });
 
-  ipcMain.handle('whisper:setGroqAnalysisApiKey', (_event, key: string) => {
-    store.set('groqAnalysisApiKey', key);
+  ipcMain.handle('settings:setAnalysisApiKey', (_event, key: string) => {
+    settingsStore.set('analysisApiKey', key);
     return { success: true };
   });
 
-  ipcMain.handle('whisper:setGroqApiKey', (_event, key: string) => {
-    store.set('groqApiKey', key);
+  ipcMain.handle('settings:setTranscriptionApiKey', (_event, key: string) => {
+    settingsStore.set('transcriptionApiKey', key);
     return { success: true };
   });
 
-  ipcMain.handle('whisper:setGroqModel', (_event, model: GroqModel) => {
-    store.set('groqModel', model);
+  ipcMain.handle('settings:setTranscriptionModel', (_event, model: GroqModel) => {
+    settingsStore.set('transcriptionModel', model);
     return { success: true };
   });
 
@@ -62,12 +62,12 @@ export function registerWhisperHandlers(): void {
       return { success: false, error: `Audio file not found: ${project.audioPath}` };
     }
 
-    const apiKey = store.get('groqApiKey', '') as string;
+    const apiKey = settingsStore.get('transcriptionApiKey', '') as string;
     if (!apiKey) {
       return { success: false, error: 'Groq API key not configured. Set it in Settings.' };
     }
-    const groqModel = store.get('groqModel', 'whisper-large-v3-turbo') as GroqModel;
+    const transcriptionModel = settingsStore.get('transcriptionModel', 'whisper-large-v3-turbo') as GroqModel;
     const win = BrowserWindow.fromWebContents(event.sender);
-    return transcribeWithGroq(projectId, project.audioPath!, apiKey, groqModel, win);
+    return transcribeWithGroq(projectId, project.audioPath!, apiKey, transcriptionModel, win);
   });
 }

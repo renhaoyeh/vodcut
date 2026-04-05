@@ -13,29 +13,29 @@ import {
 } from "@/renderer/components/ui/card"
 
 export function SettingsPage() {
-  const [groqApiKey, setGroqApiKey] = useState("")
-  const [groqModel, setGroqModel] = useState("whisper-large-v3-turbo")
-  const [groqAnalysisApiKey, setGroqAnalysisApiKey] = useState("")
+  const [transcriptionApiKey, setTranscriptionApiKey] = useState("")
+  const [transcriptionModel, setTranscriptionModel] = useState("whisper-large-v3-turbo")
+  const [analysisApiKey, setAnalysisApiKey] = useState("")
 
   useEffect(() => {
     window.electronAPI.getBackendSettings().then((settings) => {
-      setGroqApiKey(settings.groqApiKey)
-      setGroqModel(settings.groqModel)
-      setGroqAnalysisApiKey(settings.groqAnalysisApiKey)
+      setTranscriptionApiKey(settings.transcriptionApiKey)
+      setTranscriptionModel(settings.transcriptionModel)
+      setAnalysisApiKey(settings.analysisApiKey)
     })
   }, [])
 
-  const handleApiKeySave = useCallback(async () => {
-    await window.electronAPI.setGroqApiKey(groqApiKey)
-  }, [groqApiKey])
+  const handleTranscriptionApiKeySave = useCallback(async () => {
+    await window.electronAPI.setTranscriptionApiKey(transcriptionApiKey)
+  }, [transcriptionApiKey])
 
   const handleAnalysisApiKeySave = useCallback(async () => {
-    await window.electronAPI.setGroqAnalysisApiKey(groqAnalysisApiKey)
-  }, [groqAnalysisApiKey])
+    await window.electronAPI.setAnalysisApiKey(analysisApiKey)
+  }, [analysisApiKey])
 
-  const handleGroqModelChange = useCallback(async (value: string) => {
-    setGroqModel(value)
-    await window.electronAPI.setGroqModel(value)
+  const handleTranscriptionModelChange = useCallback(async (value: string) => {
+    setTranscriptionModel(value)
+    await window.electronAPI.setTranscriptionModel(value)
   }, [])
 
   return (
@@ -50,7 +50,7 @@ export function SettingsPage() {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label className="text-sm">Model</Label>
-            <RadioGroup value={groqModel} onValueChange={handleGroqModelChange}>
+            <RadioGroup value={transcriptionModel} onValueChange={handleTranscriptionModelChange}>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="whisper-large-v3-turbo" id="groq-turbo" />
                 <Label htmlFor="groq-turbo" className="font-normal">Large V3 Turbo <span className="text-muted-foreground text-xs">— faster, $0.04/hr</span></Label>
@@ -68,10 +68,10 @@ export function SettingsPage() {
                 id="groq-api-key"
                 type="password"
                 placeholder="gsk_..."
-                value={groqApiKey}
-                onChange={(e) => setGroqApiKey(e.target.value)}
+                value={transcriptionApiKey}
+                onChange={(e) => setTranscriptionApiKey(e.target.value)}
               />
-              <Button size="sm" onClick={handleApiKeySave}>Save</Button>
+              <Button size="sm" onClick={handleTranscriptionApiKeySave}>Save</Button>
             </div>
             <p className="text-xs text-muted-foreground">
               Free tier: 28,800 sec/day. Get your key at{" "}
@@ -95,8 +95,8 @@ export function SettingsPage() {
                 id="groq-analysis-api-key"
                 type="password"
                 placeholder="gsk_..."
-                value={groqAnalysisApiKey}
-                onChange={(e) => setGroqAnalysisApiKey(e.target.value)}
+                value={analysisApiKey}
+                onChange={(e) => setAnalysisApiKey(e.target.value)}
               />
               <Button size="sm" onClick={handleAnalysisApiKeySave}>Save</Button>
             </div>

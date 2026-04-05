@@ -105,7 +105,7 @@ function App() {
   const handleConvertToSrt = useCallback(async (id: string) => {
     // Check backend readiness
     const backendSettings = await window.electronAPI.getBackendSettings()
-    if (!backendSettings.groqApiKey) {
+    if (!backendSettings.transcriptionApiKey) {
       setCurrentPage("settings")
       return
     }
