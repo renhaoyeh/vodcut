@@ -75,30 +75,49 @@ function App() {
   const [currentPage, setCurrentPage] = useState<Page>("projects")
   const [projects, setProjects] = useState<VideoProject[]>([])
 
-  useEffect(() => {
-    window.electronAPI.getProjects().then((stored) => {
-      setProjects(stored.map((p) => ({ ...p, addedAt: new Date(p.addedAt) })))
-    })
+  const syncProjects = useCallback((stored: any[]) => {
+    setProjects(stored.map((p) => ({ ...p, addedAt: new Date(p.addedAt) })))
   }, [])
+
+  useEffect(() => {
+    window.electronAPI.getProjects().then(syncProjects)
+  }, [syncProjects])
+
+  // Listen for ffmpeg progress
+  useEffect(() => {
+    const cleanup = window.electronAPI.onFfmpegProgress((projectId, percent) => {
+      setProgress((prev) => ({ ...prev, [projectId]: percent }))
+    })
+    return cleanup
+  }, [])
+
+  const [progress, setProgress] = useState<Record<string, number>>({})
 
   const handleAddProjects = useCallback((newProjects: VideoProject[]) => {
     const toStore = newProjects.map((p) => ({ ...p, addedAt: p.addedAt.toISOString() }))
-    window.electronAPI.addProjects(toStore).then((stored) => {
-      setProjects(stored.map((p) => ({ ...p, addedAt: new Date(p.addedAt) })))
-    })
-  }, [])
+    window.electronAPI.addProjects(toStore).then(syncProjects)
+  }, [syncProjects])
 
   const handleRemoveProject = useCallback((id: string) => {
-    window.electronAPI.removeProject(id).then((stored) => {
-      setProjects(stored.map((p) => ({ ...p, addedAt: new Date(p.addedAt) })))
-    })
-  }, [])
+    window.electronAPI.removeProject(id).then(syncProjects)
+  }, [syncProjects])
 
-  const handleConvertToSrt = useCallback((id: string) => {
-    window.electronAPI.updateProjectStatus(id, "converting").then((stored) => {
-      setProjects(stored.map((p) => ({ ...p, addedAt: new Date(p.addedAt) })))
+  const handleConvertToSrt = useCallback(async (id: string) => {
+    await window.electronAPI.updateProjectStatus(id, "converting").then(syncProjects)
+    setProgress((prev) => ({ ...prev, [id]: 0 }))
+
+    const result = await window.electronAPI.extractAudio(id)
+    if (!result.success) {
+      await window.electronAPI.updateProjectStatus(id, "imported").then(syncProjects)
+    }
+    // success: store already updated by main process
+    await window.electronAPI.getProjects().then(syncProjects)
+    setProgress((prev) => {
+      const next = { ...prev }
+      delete next[id]
+      return next
     })
-  }, [])
+  }, [projects, syncProjects])
 
   return (
     <SidebarProvider>
@@ -113,6 +132,7 @@ function App() {
         {currentPage === "projects" && (
           <ProjectsPage
             projects={projects}
+            progress={progress}
             onAddProjects={handleAddProjects}
             onRemoveProject={handleRemoveProject}
             onConvertToSrt={handleConvertToSrt}

@@ -10,6 +10,7 @@ import {
 
 import { Button } from "@/renderer/components/ui/button"
 import { Badge } from "@/renderer/components/ui/badge"
+import { Progress } from "@/renderer/components/ui/progress"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,6 +30,7 @@ export interface VideoProject {
 
 interface ProjectsPageProps {
   projects: VideoProject[]
+  progress: Record<string, number>
   onAddProjects: (projects: VideoProject[]) => void
   onRemoveProject: (id: string) => void
   onConvertToSrt: (id: string) => void
@@ -36,6 +38,7 @@ interface ProjectsPageProps {
 
 export function ProjectsPage({
   projects,
+  progress,
   onAddProjects,
   onRemoveProject,
   onConvertToSrt,
@@ -69,7 +72,7 @@ export function ProjectsPage({
       const newProjects: VideoProject[] = files.map((file) => ({
         id: crypto.randomUUID(),
         fileName: file.name,
-        filePath: (file as any).path ?? file.name,
+        filePath: window.electronAPI.getPathForFile(file),
         addedAt: new Date(),
         status: "imported",
       }))
@@ -138,6 +141,9 @@ export function ProjectsPage({
                   <p className="truncate text-xs text-muted-foreground">
                     {project.filePath}
                   </p>
+                  {progress[project.id] !== undefined && (
+                    <Progress value={progress[project.id]} className="mt-2 h-1.5" />
+                  )}
                 </div>
                 <Badge variant={statusVariant[project.status]}>
                   {statusLabel[project.status]}

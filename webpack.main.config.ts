@@ -4,6 +4,9 @@ import { rules } from './webpack.rules';
 import { plugins } from './webpack.plugins';
 
 export const mainConfig: Configuration = {
+  externals: {
+    'ffmpeg-static': 'commonjs2 ffmpeg-static',
+  },
   /**
    * This is the main entry point for your application, it's the first file
    * that runs in the main process.

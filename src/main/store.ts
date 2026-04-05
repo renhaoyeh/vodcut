@@ -5,6 +5,7 @@ export interface StoredProject {
   id: string;
   fileName: string;
   filePath: string;
+  audioPath?: string;
   addedAt: string;
   status: 'imported' | 'converting' | 'completed';
 }
@@ -18,6 +19,15 @@ const store = new Store<StoreSchema>({
     projects: [],
   },
 });
+
+export function getProjectById(id: string): StoredProject | undefined {
+  return store.get('projects').find((p) => p.id === id);
+}
+
+export function updateProject(id: string, updates: Partial<StoredProject>): void {
+  const current = store.get('projects');
+  store.set('projects', current.map((p) => (p.id === id ? { ...p, ...updates } : p)));
+}
 
 export function registerStoreHandlers(): void {
   ipcMain.handle('store:getProjects', () => {

@@ -1,8 +1,13 @@
+import type { StoredProject } from '../main/store';
+
 interface ElectronAPI {
-  getProjects: () => Promise<import('../main/store').StoredProject[]>;
-  addProjects: (projects: import('../main/store').StoredProject[]) => Promise<import('../main/store').StoredProject[]>;
-  removeProject: (id: string) => Promise<import('../main/store').StoredProject[]>;
-  updateProjectStatus: (id: string, status: string) => Promise<import('../main/store').StoredProject[]>;
+  getPathForFile: (file: File) => string;
+  getProjects: () => Promise<StoredProject[]>;
+  addProjects: (projects: StoredProject[]) => Promise<StoredProject[]>;
+  removeProject: (id: string) => Promise<StoredProject[]>;
+  updateProjectStatus: (id: string, status: string) => Promise<StoredProject[]>;
+  extractAudio: (projectId: string) => Promise<{ success: boolean; audioPath?: string; error?: string }>;
+  onFfmpegProgress: (callback: (projectId: string, percent: number) => void) => () => void;
 }
 
 declare global {
