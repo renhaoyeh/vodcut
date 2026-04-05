@@ -1,8 +1,7 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import https from 'https';
 import fs from 'fs';
-import path from 'path';
-import { getProjectById, updateProject, settingsStore } from './store';
+import { getProjectById, updateProject, settingsStore, projectPaths, writeProjectFile, readProjectFile } from './store';
 
 const SYSTEM_PROMPT = `你是一位專業的影片剪輯顧問。使用者會給你一段影片的逐字稿（SRT 格式，含時間戳記），
 請你分析內容並以 **純 JSON** 回傳（不要加 markdown code fence），格式如下：
@@ -196,15 +195,16 @@ export function registerAnalyzerHandlers(): void {
   ipcMain.handle('analyzer:analyze', async (event, projectId: string, provider: string, model: string) => {
     const project = getProjectById(projectId);
     if (!project) return { success: false, error: 'Project not found' };
-    if (!project.srtPath) return { success: false, error: 'No SRT file. Transcribe first.' };
-    if (!fs.existsSync(project.srtPath)) return { success: false, error: `SRT file not found: ${project.srtPath}` };
+
+    const paths = projectPaths(projectId);
+    if (!fs.existsSync(paths.srt)) return { success: false, error: 'No SRT file. Transcribe first.' };
 
     const win = BrowserWindow.fromWebContents(event.sender);
 
     try {
       win?.webContents.send('analyzer:status', projectId, 'analyzing');
 
-      const srtContent = fs.readFileSync(project.srtPath, 'utf8');
+      const srtContent = fs.readFileSync(paths.srt, 'utf8');
 
       let analysisData: AnalysisData;
 
@@ -242,13 +242,8 @@ export function registerAnalyzerHandlers(): void {
         analysisData = { sections: allSections, clips: allClips };
       }
 
-      // Save JSON file next to the video
-      const videoDir = path.dirname(project.filePath);
-      const videoName = path.basename(project.filePath, path.extname(project.filePath));
-      const analysisPath = path.join(videoDir, `${videoName}.analysis.json`);
-      fs.writeFileSync(analysisPath, JSON.stringify(analysisData, null, 2), 'utf8');
-
-      updateProject(projectId, { analysisData, analysisPath });
+      // Save analysis to project folder
+      writeProjectFile(paths.analysis, analysisData);
 
       win?.webContents.send('analyzer:status', projectId, 'done');
       return { success: true, data: analysisData };
@@ -259,7 +254,7 @@ export function registerAnalyzerHandlers(): void {
   });
 
   ipcMain.handle('analyzer:getData', (_event, projectId: string) => {
-    const project = getProjectById(projectId);
-    return project?.analysisData ?? null;
+    const paths = projectPaths(projectId);
+    return readProjectFile<AnalysisData>(projectId, paths.analysis);
   });
 }

@@ -3,17 +3,9 @@ import { spawn } from 'child_process';
 import { ipcMain, BrowserWindow, app } from 'electron';
 import path from 'path';
 import fs from 'fs';
-import { getProjectById, updateProject } from './store';
+import { getProjectById, updateProject, projectPaths } from './store';
 
 const ffmpegPath = path.join(process.cwd(), 'node_modules', 'ffmpeg-static', 'ffmpeg.exe');
-
-function getOutputDir(): string {
-  const dir = path.join(app.getPath('userData'), 'audio');
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  return dir;
-}
 
 /**
  * Write a temporary ffmpeg concat-style file list to pass Unicode paths safely.
@@ -50,12 +42,9 @@ function getDuration(videoPath: string): Promise<number> {
 
 export async function extractAudio(
   videoPath: string,
+  outputPath: string,
   onProgress: (percent: number) => void,
 ): Promise<string> {
-  const outputPath = path.join(
-    getOutputDir(),
-    `${path.basename(videoPath, path.extname(videoPath))}.wav`,
-  );
 
   const durationSec = await getDuration(videoPath);
   const inputFile = writeTempInputFile(videoPath);
@@ -108,17 +97,19 @@ export function registerFfmpegHandlers(): void {
     if (!project) {
       return { success: false, error: 'Project not found' };
     }
+    const paths = projectPaths(projectId);
+
     // Skip if audio already extracted
-    if (project.audioPath && fs.existsSync(project.audioPath)) {
-      return { success: true, audioPath: project.audioPath };
+    if (fs.existsSync(paths.audio)) {
+      return { success: true, audioPath: paths.audio };
     }
 
     const win = BrowserWindow.fromWebContents(event.sender);
     try {
-      const audioPath = await extractAudio(project.filePath, (percent) => {
+      const audioPath = await extractAudio(project.filePath, paths.audio, (percent) => {
         win?.webContents.send('ffmpeg:progress', projectId, percent);
       });
-      updateProject(projectId, { status: 'completed', audioPath });
+      updateProject(projectId, { status: 'completed' });
       return { success: true, audioPath };
     } catch (err) {
       return { success: false, error: (err as Error).message };

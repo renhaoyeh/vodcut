@@ -76,7 +76,7 @@ function App() {
             projectId={playerProject.id}
             filePath={playerProject.filePath}
             fileName={playerProject.fileName}
-            hasSrt={!!playerProject.srtPath}
+            hasSrt={playerProject.status === "completed"}
             onBack={() => { setPlayerProject(null); window.electronAPI.getProjects().then(syncProjects) }}
           />
         ) : (

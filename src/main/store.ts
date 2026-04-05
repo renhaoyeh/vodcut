@@ -1,5 +1,5 @@
 import Store from 'electron-store';
-import { ipcMain } from 'electron';
+import { ipcMain, app } from 'electron';
 import fs from 'fs';
 import path from 'path';
 
@@ -19,13 +19,8 @@ export interface StoredProject {
   id: string;
   fileName: string;
   filePath: string;
-  audioPath?: string;
-  srtPath?: string;
   addedAt: string;
   status: 'imported' | 'converting' | 'completed';
-  transcriptionProgress?: TranscriptionProgress;
-  analysisData?: AnalysisData;
-  analysisPath?: string;
 }
 
 export type GroqModel = 'whisper-large-v3' | 'whisper-large-v3-turbo';
@@ -47,7 +42,7 @@ export const settingsStore = new Store<SettingsSchema>({
   },
 });
 
-// --- Project store (video records) ---
+// --- Project store (lightweight index) ---
 
 interface ProjectSchema {
   projects: StoredProject[];
@@ -60,6 +55,31 @@ export const projectStore = new Store<ProjectSchema>({
   },
 });
 
+// --- Per-project folder helpers ---
+
+/** Return the project's dedicated folder, creating it if needed. */
+export function getProjectDir(projectId: string): string {
+  const dir = path.join(app.getPath('userData'), 'projects', projectId);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  return dir;
+}
+
+/** Well-known file paths inside a project folder. */
+export function projectPaths(projectId: string) {
+  const dir = getProjectDir(projectId);
+  return {
+    dir,
+    audio: path.join(dir, 'audio.wav'),
+    srt: path.join(dir, 'subtitles.srt'),
+    analysis: path.join(dir, 'analysis.json'),
+    progress: path.join(dir, 'transcription-progress.json'),
+  };
+}
+
+// --- Helpers ---
+
 export function getProjectById(id: string): StoredProject | undefined {
   return projectStore.get('projects').find((p) => p.id === id);
 }
@@ -69,6 +89,22 @@ export function updateProject(id: string, updates: Partial<StoredProject>): void
   projectStore.set('projects', current.map((p) => (p.id === id ? { ...p, ...updates } : p)));
 }
 
+/** Read JSON from a project file, returning null if missing. */
+export function readProjectFile<T>(projectId: string, filePath: string): T | null {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+/** Write JSON to a project file. */
+export function writeProjectFile(filePath: string, data: unknown): void {
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+}
+
+// --- IPC handlers ---
+
 export function registerStoreHandlers(): void {
   ipcMain.handle('store:getProjects', () => {
     return projectStore.get('projects');
@@ -76,64 +112,68 @@ export function registerStoreHandlers(): void {
 
   ipcMain.handle('store:addProjects', (_event, projects: StoredProject[]) => {
     const current = projectStore.get('projects');
-    // Auto-detect existing SRT file next to the video
-    const enriched = projects.map((p) => {
+
+    const newProjects = projects.map((p) => {
+      // Ensure project folder exists
+      getProjectDir(p.id);
+
+      // Auto-detect existing SRT file next to the video
       const ext = path.extname(p.filePath);
       const baseName = path.basename(p.filePath, ext);
-      const dir = path.dirname(p.filePath);
-      const srtPath = path.join(dir, baseName + '.srt');
-      const analysisPath = path.join(dir, baseName + '.analysis.json');
+      const videoDir = path.dirname(p.filePath);
+      const existingSrt = path.join(videoDir, baseName + '.srt');
+      const existingAnalysis = path.join(videoDir, baseName + '.analysis.json');
 
+      const paths = projectPaths(p.id);
       let enriched = { ...p };
 
-      if (fs.existsSync(srtPath)) {
-        enriched = { ...enriched, srtPath, status: 'completed' as const };
+      if (fs.existsSync(existingSrt)) {
+        // Copy SRT into project folder
+        fs.copyFileSync(existingSrt, paths.srt);
+        enriched = { ...enriched, status: 'completed' as const };
       }
 
-      if (fs.existsSync(analysisPath)) {
+      if (fs.existsSync(existingAnalysis)) {
         try {
-          const data = JSON.parse(fs.readFileSync(analysisPath, 'utf8'));
-          enriched = { ...enriched, analysisData: data, analysisPath };
+          // Copy analysis into project folder
+          fs.copyFileSync(existingAnalysis, paths.analysis);
         } catch {}
       }
 
       return enriched;
     });
-    projectStore.set('projects', [...current, ...enriched]);
+
+    projectStore.set('projects', [...current, ...newProjects]);
     return projectStore.get('projects');
   });
 
   ipcMain.handle('store:removeProject', (_event, id: string) => {
     const current = projectStore.get('projects');
-    const project = current.find((p) => p.id === id);
-    if (project?.audioPath) {
-      try { fs.unlinkSync(project.audioPath); } catch {}
-    }
+    // Remove entire project folder
+    const dir = path.join(app.getPath('userData'), 'projects', id);
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
     projectStore.set('projects', current.filter((p) => p.id !== id));
     return projectStore.get('projects');
   });
 
   ipcMain.handle('store:updateProjectStatus', (_event, id: string, status: StoredProject['status']) => {
-    const current = projectStore.get('projects');
-    projectStore.set('projects', current.map((p) => (p.id === id ? { ...p, status } : p)));
+    updateProject(id, { status });
     return projectStore.get('projects');
   });
 
   ipcMain.handle('store:readSrt', (_event, projectId: string) => {
-    const project = projectStore.get('projects').find((p) => p.id === projectId);
-    if (!project?.srtPath) return null;
+    const paths = projectPaths(projectId);
     try {
-      return fs.readFileSync(project.srtPath, 'utf8');
+      return fs.readFileSync(paths.srt, 'utf8');
     } catch {
       return null;
     }
   });
 
   ipcMain.handle('store:saveSrt', (_event, projectId: string, content: string) => {
-    const project = projectStore.get('projects').find((p) => p.id === projectId);
-    if (!project?.srtPath) return { success: false, error: 'No SRT path' };
+    const paths = projectPaths(projectId);
     try {
-      fs.writeFileSync(project.srtPath, content, 'utf8');
+      fs.writeFileSync(paths.srt, content, 'utf8');
       return { success: true };
     } catch (e) {
       return { success: false, error: (e as Error).message };

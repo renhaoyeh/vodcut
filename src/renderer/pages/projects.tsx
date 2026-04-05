@@ -18,7 +18,6 @@ export interface VideoProject {
   id: string
   fileName: string
   filePath: string
-  srtPath?: string
   addedAt: Date
   status: "imported" | "converting" | "completed"
 }
@@ -125,7 +124,7 @@ export function ProjectsPage({
                         {project.filePath}
                       </p>
                     </div>
-                    {project.srtPath && (
+                    {project.status === "completed" && (
                       <span className="flex items-center gap-1 text-xs text-muted-foreground"><FileText className="size-4" />SRT</span>
                     )}
                   </div>

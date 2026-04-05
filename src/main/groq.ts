@@ -4,7 +4,7 @@ import fs from 'fs';
 import https from 'https';
 import crypto from 'crypto';
 import { spawn } from 'child_process';
-import { getProjectById, updateProject } from './store';
+import { getProjectById, updateProject, projectPaths, readProjectFile, writeProjectFile, type TranscriptionProgress } from './store';
 import { type SrtSegment, segmentsToSrt } from './whisper';
 
 const ffmpegPath = path.join(process.cwd(), 'node_modules', 'ffmpeg-static', 'ffmpeg.exe');
@@ -115,12 +115,14 @@ export async function transcribeWithGroq(
   const project = getProjectById(projectId);
   if (!project) return { success: false, error: 'Project not found' };
 
+  const paths = projectPaths(projectId);
+
   try {
     const totalSec = getAudioDuration(audioPath);
     const numChunks = Math.ceil(totalSec / CHUNK_SEC);
 
     // Resume from saved progress
-    const saved = project.transcriptionProgress;
+    const saved = readProjectFile<TranscriptionProgress>(projectId, paths.progress);
     const allSegments: SrtSegment[] = saved?.segments ?? [];
     let segIdx = saved?.segIdx ?? 1;
     let c = saved?.currentChunk ?? 0;
@@ -156,23 +158,20 @@ export async function transcribeWithGroq(
       c++;
 
       // Persist progress after each chunk
-      updateProject(projectId, {
-        transcriptionProgress: { currentChunk: c, numChunks, segments: allSegments, segIdx },
-      });
+      writeProjectFile(paths.progress, { currentChunk: c, numChunks, segments: allSegments, segIdx });
     }
 
     win?.webContents.send('whisper:progress', projectId, 100);
 
     const srtContent = segmentsToSrt(allSegments);
+    fs.writeFileSync(paths.srt, srtContent, 'utf8');
 
-    const videoDir = path.dirname(project.filePath);
-    const videoName = path.basename(project.filePath, path.extname(project.filePath));
-    const srtPath = path.join(videoDir, `${videoName}.srt`);
-    fs.writeFileSync(srtPath, srtContent, 'utf8');
+    // Clean up progress file
+    try { fs.unlinkSync(paths.progress); } catch {}
 
-    updateProject(projectId, { status: 'completed', srtPath, transcriptionProgress: undefined });
+    updateProject(projectId, { status: 'completed' });
 
-    return { success: true, srtPath, segments: allSegments };
+    return { success: true, srtPath: paths.srt, segments: allSegments };
   } catch (err) {
     return { success: false, error: (err as Error).message };
   }

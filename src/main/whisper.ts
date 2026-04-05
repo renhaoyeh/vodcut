@@ -1,6 +1,6 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import fs from 'fs';
-import { getProjectById, settingsStore } from './store';
+import { getProjectById, settingsStore, projectPaths } from './store';
 import type { GroqModel } from './store';
 import { transcribeWithGroq } from './groq';
 
@@ -56,11 +56,10 @@ export function registerWhisperHandlers(): void {
     if (!project) {
       return { success: false, error: 'Project not found' };
     }
-    if (!project.audioPath) {
+
+    const paths = projectPaths(projectId);
+    if (!fs.existsSync(paths.audio)) {
       return { success: false, error: 'Audio not extracted yet. Run extract audio first.' };
-    }
-    if (!fs.existsSync(project.audioPath)) {
-      return { success: false, error: `Audio file not found: ${project.audioPath}` };
     }
 
     const apiKey = settingsStore.get('transcriptionApiKey', '') as string;
@@ -68,6 +67,6 @@ export function registerWhisperHandlers(): void {
       return { success: false, error: 'Groq API key not configured. Set it in Settings.' };
     }
     const win = BrowserWindow.fromWebContents(event.sender);
-    return transcribeWithGroq(projectId, project.audioPath!, apiKey, model as GroqModel, win);
+    return transcribeWithGroq(projectId, paths.audio, apiKey, model as GroqModel, win);
   });
 }
