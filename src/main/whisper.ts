@@ -97,11 +97,17 @@ async function getContext(modelSize: WhisperModelSize): Promise<WhisperContext> 
 
   console.log('[whisper] Loading model:', modelPath);
   if (process.platform === 'win32') {
-    // Windows: try CUDA variant, fallback to CPU
+    // Probe if CUDA native module is actually loadable (not just installed)
+    let hasCuda = false;
     try {
+      require('@fugood/node-whisper-win32-x64-cuda');
+      hasCuda = true;
+    } catch {}
+
+    if (hasCuda) {
       context = await initWhisper({ filePath: modelPath, useGpu: true }, 'cuda');
       gpuBackend = 'cuda';
-    } catch {
+    } else {
       context = await initWhisper({ filePath: modelPath, useGpu: true });
       gpuBackend = 'cpu';
     }
