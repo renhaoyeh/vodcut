@@ -4,6 +4,7 @@ import { ArrowLeft, Maximize, Minimize, Pause, Play, Loader2, Sparkles, ListVide
 import { Button } from "@/renderer/components/ui/button"
 import { Separator } from "@/renderer/components/ui/separator"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/renderer/components/ui/select"
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/renderer/components/ui/resizable"
 import type { AnalysisData } from "@/main/store"
 import { toast } from "sonner"
 
@@ -749,11 +750,12 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
         </div>
       )}
 
-      <div className="flex min-h-0 flex-1">
+      <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
         {/* Video area */}
+        <ResizablePanel defaultSize={75} minSize={40}>
         <div
           ref={containerRef}
-          className="relative flex min-h-0 flex-1 cursor-pointer items-center justify-center overflow-hidden bg-black"
+          className="relative flex h-full cursor-pointer items-center justify-center overflow-hidden bg-black"
           onMouseMove={resetHideTimer}
           onClick={(e) => {
             if ((e.target as HTMLElement).closest("[data-controls]")) return
@@ -807,10 +809,14 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
             />
           </div>
         </div>
+        </ResizablePanel>
 
         {/* Side panel */}
         {!isFullscreen && (
-          <div className="flex w-80 shrink-0 flex-col border-l bg-background">
+          <>
+          <ResizableHandle withHandle />
+          <ResizablePanel defaultSize={25} minSize={15} maxSize={50}>
+          <div className="flex h-full flex-col bg-background">
             <div className="flex border-b">
               {hasSrt && (
                 <button
@@ -937,8 +943,10 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
               })}
             </div>
           </div>
+          </ResizablePanel>
+          </>
         )}
-      </div>
+      </ResizablePanelGroup>
     </div>
   )
 }
