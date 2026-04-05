@@ -78,6 +78,7 @@ interface PlaybackControlsProps {
   isFullscreen: boolean
   volume: number
   clip: { startMs: number; endMs: number } | null
+  sections: Array<{ startMs: number; endMs: number }> | null
   onTogglePlayPause: () => void
   onSeek: (time: number) => void
   onToggleFullscreen: () => void
@@ -92,6 +93,7 @@ function PlaybackControls({
   isFullscreen,
   volume,
   clip,
+  sections,
   onTogglePlayPause,
   onSeek,
   onToggleFullscreen,
@@ -147,7 +149,22 @@ function PlaybackControls({
       </span>
 
       <div className="group relative flex h-6 flex-1 items-center">
-        <div className={`absolute left-0 right-0 h-0.5 overflow-hidden rounded-full ${clip ? "bg-primary/20" : "bg-white/10"}`}>
+        {/* Section markers on the full timeline */}
+        {!clip && sections && duration > 0 && sections.map((sec, i) => {
+          const left = (sec.startMs / 1000 / duration) * 100
+          const width = ((sec.endMs - sec.startMs) / 1000 / duration) * 100
+          const colors = ["bg-blue-500/50", "bg-emerald-500/50", "bg-amber-500/50", "bg-purple-500/50", "bg-rose-500/50"]
+          return (
+            <div
+              key={i}
+              className={`absolute top-1/2 h-1.5 -translate-y-1/2 rounded-sm ${colors[i % colors.length]}`}
+              style={{ left: `${left}%`, width: `${width}%` }}
+            />
+          )
+        })}
+
+        {/* Progress bar track */}
+        <div className={`absolute left-0 right-0 h-1 overflow-hidden rounded-full transition-all group-hover:h-1.5 ${clip ? "bg-primary/20" : "bg-white/15"}`}>
           <div
             className={`h-full rounded-full ${clip ? "bg-primary" : "bg-[#34B27B]"}`}
             style={{ width: `${progress}%` }}
@@ -775,6 +792,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
               isFullscreen={isFullscreen}
               volume={volume}
               clip={activeClip}
+              sections={analysis?.sections ?? null}
               onTogglePlayPause={togglePlayPause}
               onSeek={handleSeek}
               onToggleFullscreen={toggleFullscreen}
