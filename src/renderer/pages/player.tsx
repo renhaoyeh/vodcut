@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from "react"
-import { ArrowLeft, Maximize, Minimize, Pause, Play, Loader2, Sparkles, ListVideo, Scissors } from "lucide-react"
+import { ArrowLeft, Maximize, Minimize, Pause, Play, Loader2, Sparkles, ListVideo, Scissors, Volume2, VolumeX } from "lucide-react"
 import { Button } from "@/renderer/components/ui/button"
 import type { AnalysisData } from "@/main/store"
 
@@ -45,9 +45,11 @@ interface PlaybackControlsProps {
   currentTime: number
   duration: number
   isFullscreen: boolean
+  volume: number
   onTogglePlayPause: () => void
   onSeek: (time: number) => void
   onToggleFullscreen: () => void
+  onVolumeChange: (volume: number) => void
 }
 
 function PlaybackControls({
@@ -55,12 +57,25 @@ function PlaybackControls({
   currentTime,
   duration,
   isFullscreen,
+  volume,
   onTogglePlayPause,
   onSeek,
   onToggleFullscreen,
+  onVolumeChange,
 }: PlaybackControlsProps) {
+  const [prevVolume, setPrevVolume] = useState(volume || 1)
+
   function handleSeekChange(e: React.ChangeEvent<HTMLInputElement>) {
     onSeek(parseFloat(e.target.value))
+  }
+
+  function handleToggleMute() {
+    if (volume > 0) {
+      setPrevVolume(volume)
+      onVolumeChange(0)
+    } else {
+      onVolumeChange(prevVolume)
+    }
   }
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
@@ -114,6 +129,32 @@ function PlaybackControls({
       <span className="w-[30px] text-[9px] font-medium tabular-nums text-slate-500">
         {formatTime(duration)}
       </span>
+
+      {/* Volume */}
+      <div className="group/vol flex items-center">
+        <Button
+          onClick={handleToggleMute}
+          size="icon"
+          className="size-7 shrink-0 rounded-full border border-transparent text-white shadow-none hover:border-white/10 hover:bg-white/10"
+        >
+          {volume === 0 ? (
+            <VolumeX className="size-3.5" />
+          ) : (
+            <Volume2 className="size-3.5" />
+          )}
+        </Button>
+        <div className="w-0 overflow-hidden transition-all duration-200 group-hover/vol:w-16">
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={volume}
+            onChange={(e) => onVolumeChange(parseFloat(e.target.value))}
+            className="h-1 w-14 cursor-pointer accent-white"
+          />
+        </div>
+      </div>
 
       <Button
         onClick={onToggleFullscreen}
@@ -245,6 +286,7 @@ export function PlayerPage({ projectId, filePath, fileName, onBack }: PlayerPage
   const [duration, setDuration] = useState(0)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [showControls, setShowControls] = useState(true)
+  const [volume, setVolume] = useState(1)
 
   // Analysis state
   const [analysis, setAnalysis] = useState<AnalysisData | null>(null)
@@ -359,6 +401,11 @@ export function PlayerPage({ projectId, filePath, fileName, onBack }: PlayerPage
     const video = videoRef.current
     if (!video) return
     video.currentTime = time
+  }, [])
+
+  const handleVolumeChange = useCallback((v: number) => {
+    setVolume(v)
+    if (videoRef.current) videoRef.current.volume = v
   }, [])
 
   // Fullscreen
@@ -511,9 +558,11 @@ export function PlayerPage({ projectId, filePath, fileName, onBack }: PlayerPage
               currentTime={currentTime}
               duration={duration}
               isFullscreen={isFullscreen}
+              volume={volume}
               onTogglePlayPause={togglePlayPause}
               onSeek={handleSeek}
               onToggleFullscreen={toggleFullscreen}
+              onVolumeChange={handleVolumeChange}
             />
           </div>
         </div>
