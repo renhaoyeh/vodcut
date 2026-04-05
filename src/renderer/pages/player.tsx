@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from "react"
+import { useTranslation } from "react-i18next"
 import { ArrowLeft, Maximize, Minimize, Pause, Play, Loader2, Sparkles, ListVideo, Scissors, Volume2, VolumeX, Mic, FileText } from "lucide-react"
 import { Button } from "@/renderer/components/ui/button"
 import { Separator } from "@/renderer/components/ui/separator"
@@ -80,6 +81,7 @@ interface PlaybackControlsProps {
   volume: number
   clip: { startMs: number; endMs: number } | null
   sections: Array<{ startMs: number; endMs: number }> | null
+  clearClipLabel: string
   onTogglePlayPause: () => void
   onSeek: (time: number) => void
   onToggleFullscreen: () => void
@@ -95,6 +97,7 @@ function PlaybackControls({
   volume,
   clip,
   sections,
+  clearClipLabel,
   onTogglePlayPause,
   onSeek,
   onToggleFullscreen,
@@ -197,7 +200,7 @@ function PlaybackControls({
           onClick={onClearClip}
           className="shrink-0 rounded-full bg-primary px-2.5 py-0.5 text-[10px] font-medium text-primary-foreground hover:bg-primary/80"
         >
-          ✕ 片段
+          {clearClipLabel}
         </button>
       )}
 
@@ -341,6 +344,7 @@ interface PlayerPageProps {
 }
 
 export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSrt, onBack }: PlayerPageProps) {
+  const { t } = useTranslation()
   const videoRef = useRef<HTMLVideoElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -426,7 +430,12 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
       if (pid === projectId) setTranscribeProgress(pct)
     })
     const c2 = window.electronAPI.onWhisperStage((pid, stage) => {
-      if (pid === projectId) setTranscribeStage(stage)
+      if (pid !== projectId) return
+      try {
+        const data = JSON.parse(stage)
+        if (data.key) { setTranscribeStage(t(data.key, data) as string); return }
+      } catch { /* plain string */ }
+      setTranscribeStage(stage)
     })
     return () => { c1(); c2() }
   }, [projectId])
@@ -435,7 +444,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
     setTranscribing(true)
     setSavedProgress(null)
     // error shown via toast
-    setTranscribeStage("轉換音訊中...")
+    setTranscribeStage(t("player.convertingAudio"))
     setTranscribeProgress(0)
     try {
       // Step 1: Extract audio
@@ -445,7 +454,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
         return
       }
       // Step 2: Transcribe
-      setTranscribeStage("辨識中...")
+      setTranscribeStage(t("player.recognizing"))
       const result = await window.electronAPI.transcribe(projectId, transcriptionModelKey)
       if (result.success) {
         const srt = await window.electronAPI.readSrt(projectId)
@@ -679,10 +688,10 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                   </SelectContent>
                 </Select>
                 <Button variant="outline" size="sm" onClick={handleTranscribe} disabled={!hasTranscriptionKey}
-                  title={!hasTranscriptionKey ? "請先在 Settings 填入 Groq Whisper API Key" : undefined}
+                  title={!hasTranscriptionKey ? t("player.transcribeNoKey") : undefined}
                 >
                   <Mic className="mr-1 size-4" />
-                  {savedProgress ? `繼續轉錄 (${savedProgress.current}/${savedProgress.total})` : hasSrt ? "重新轉錄" : "轉錄"}
+                  {savedProgress ? t("player.resumeTranscribe", { current: savedProgress.current, total: savedProgress.total }) : hasSrt ? t("player.retranscribe") : t("player.transcribe")}
                 </Button>
               </>
             ) : (
@@ -705,7 +714,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      <SelectLabel className="text-[10px]">Gemini{!hasGeminiKey ? " (no key)" : ""}</SelectLabel>
+                      <SelectLabel className="text-[10px]">Gemini{!hasGeminiKey ? t("player.noKey") : ""}</SelectLabel>
                       {ANALYSIS_MODELS.filter((m) => m.value.startsWith("gemini:")).map((m) => (
                         <SelectItem key={m.value} value={m.value} className="text-xs" disabled={!hasGeminiKey}>
                           {m.label}
@@ -713,7 +722,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                       ))}
                     </SelectGroup>
                     <SelectGroup>
-                      <SelectLabel className="text-[10px]">Groq{!hasGroqKey ? " (no key)" : ""}</SelectLabel>
+                      <SelectLabel className="text-[10px]">Groq{!hasGroqKey ? t("player.noKey") : ""}</SelectLabel>
                       {ANALYSIS_MODELS.filter((m) => m.value.startsWith("groq:")).map((m) => (
                         <SelectItem key={m.value} value={m.value} className="text-xs" disabled={!hasGroqKey}>
                           {m.label}
@@ -724,16 +733,16 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                 </Select>
                 <Button variant="outline" size="sm" onClick={handleAnalyze}
                   disabled={!hasSrt || (analysisModelKey.startsWith("gemini:") ? !hasGeminiKey : !hasGroqKey)}
-                  title={!hasSrt ? "請先轉錄" : undefined}
+                  title={!hasSrt ? t("player.analyzeNoSrt") : undefined}
                 >
                   <Sparkles className="mr-1 size-4" />
-                  {analysis ? "重新分析" : "分析大綱"}
+                  {analysis ? t("player.reanalyze") : t("player.analyze")}
                 </Button>
               </>
             ) : (
               <Button variant="outline" size="sm" disabled>
                 <Loader2 className="mr-1 size-4 animate-spin" />
-                分析中...
+                {t("player.analyzing")}
               </Button>
             )}
           </div>
@@ -793,6 +802,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
               onSeek={handleSeek}
               onToggleFullscreen={toggleFullscreen}
               onVolumeChange={handleVolumeChange}
+              clearClipLabel={t("player.clearClip")}
               onClearClip={clearClip}
             />
           </div>
@@ -812,7 +822,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                   onClick={() => { setPanelTab("srt"); setActiveClip(null) }}
                 >
                   <FileText className="mr-1 inline size-3.5" />
-                  字幕 ({subtitles.length})
+                  {t("player.tabSubtitles", { count: subtitles.length })}
                 </button>
               )}
               {analysis && (
@@ -826,7 +836,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                     onClick={() => { setPanelTab("sections"); setActiveClip(null) }}
                   >
                     <ListVideo className="mr-1 inline size-3.5" />
-                    段落 ({analysis.sections.length})
+                    {t("player.tabSections", { count: analysis.sections.length })}
                   </button>
                   <button
                     className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
@@ -837,7 +847,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                     onClick={() => setPanelTab("clips")}
                   >
                     <Scissors className="mr-1 inline size-3.5" />
-                    剪輯建議 ({analysis.clips.length})
+                    {t("player.tabClips", { count: analysis.clips.length })}
                   </button>
                 </>
               )}
@@ -917,7 +927,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                         {formatMs(clip.startMs)} – {formatMs(clip.endMs)}
                       </span>
                       {isActive && (
-                        <span className="text-[10px] text-primary">播放中 · 點擊取消</span>
+                        <span className="text-[10px] text-primary">{t("player.playingClickToCancel")}</span>
                       )}
                     </div>
                     <p className="mt-0.5 text-sm font-medium">{clip.title}</p>

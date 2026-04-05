@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from "react"
 import { createRoot } from "react-dom/client"
 import { Scissors } from "lucide-react"
 
+import "@/renderer/i18n"
 import { ProjectsPage, type VideoProject } from "@/renderer/pages/projects"
 import { SettingsDialog } from "@/renderer/pages/settings"
 import { PlayerPage } from "@/renderer/pages/player"

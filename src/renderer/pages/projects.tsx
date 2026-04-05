@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from "react"
+import { useTranslation } from "react-i18next"
 import {
   FileVideo,
   Upload,
@@ -35,6 +36,7 @@ export function ProjectsPage({
   onRemoveProject,
   onPreview,
 }: ProjectsPageProps) {
+  const { t } = useTranslation()
   const [isDragOver, setIsDragOver] = useState(false)
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -91,9 +93,9 @@ export function ProjectsPage({
           <Upload className="size-6 text-muted-foreground" />
         </div>
         <div className="text-center">
-          <p className="text-sm font-medium">Drop video files here</p>
+          <p className="text-sm font-medium">{t("projects.dropZone")}</p>
           <p className="text-xs text-muted-foreground">
-            Supports MP4, MOV, AVI, MKV, WebM
+            {t("projects.supportedFormats")}
           </p>
         </div>
       </div>
@@ -102,8 +104,8 @@ export function ProjectsPage({
       {projects.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
           <FileVideo className="size-10" />
-          <p className="text-sm">No videos yet</p>
-          <p className="text-xs">Drag and drop video files above to get started</p>
+          <p className="text-sm">{t("projects.noVideos")}</p>
+          <p className="text-xs">{t("projects.dragToStart")}</p>
         </div>
       ) : (
         <ScrollArea className="flex-1">
@@ -135,7 +137,7 @@ export function ProjectsPage({
                     onClick={() => onRemoveProject(project.id)}
                   >
                     <Trash2 className="mr-2 size-4" />
-                    Delete
+                    {t("projects.delete")}
                   </ContextMenuItem>
                 </ContextMenuContent>
               </ContextMenu>

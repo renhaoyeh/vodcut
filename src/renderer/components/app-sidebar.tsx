@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next"
 import {
   LayoutDashboard,
   FolderOpen,
@@ -22,21 +23,22 @@ import {
 
 export type Page = "dashboard" | "projects" | "settings"
 
-const mainNav = [
-  { title: "Dashboard", icon: LayoutDashboard, page: "dashboard" as Page },
-  { title: "Projects", icon: FolderOpen, page: "projects" as Page },
-]
-
-const secondaryNav = [
-  { title: "Settings", icon: Settings, page: "settings" as Page },
-]
-
 interface AppSidebarProps {
   currentPage: Page
   onNavigate: (page: Page) => void
 }
 
 export function AppSidebar({ currentPage, onNavigate }: AppSidebarProps) {
+  const { t } = useTranslation()
+
+  const mainNav = [
+    { title: t("nav.dashboard"), icon: LayoutDashboard, page: "dashboard" as Page },
+    { title: t("nav.projects"), icon: FolderOpen, page: "projects" as Page },
+  ]
+
+  const secondaryNav = [
+    { title: t("nav.settings"), icon: Settings, page: "settings" as Page },
+  ]
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
@@ -57,7 +59,7 @@ export function AppSidebar({ currentPage, onNavigate }: AppSidebarProps) {
       <SidebarSeparator />
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Main</SidebarGroupLabel>
+          <SidebarGroupLabel>{t("nav.main")}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {mainNav.map((item) => (
