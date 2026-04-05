@@ -149,20 +149,6 @@ function PlaybackControls({
       </span>
 
       <div className="group relative flex h-6 flex-1 items-center">
-        {/* Section markers on the full timeline */}
-        {!clip && sections && duration > 0 && sections.map((sec, i) => {
-          const left = (sec.startMs / 1000 / duration) * 100
-          const width = ((sec.endMs - sec.startMs) / 1000 / duration) * 100
-          const colors = ["bg-blue-500/50", "bg-emerald-500/50", "bg-amber-500/50", "bg-purple-500/50", "bg-rose-500/50"]
-          return (
-            <div
-              key={i}
-              className={`absolute top-1/2 h-1.5 -translate-y-1/2 rounded-sm ${colors[i % colors.length]}`}
-              style={{ left: `${left}%`, width: `${width}%` }}
-            />
-          )
-        })}
-
         {/* Progress bar track */}
         <div className={`absolute left-0 right-0 h-1 overflow-hidden rounded-full transition-all group-hover:h-1.5 ${clip ? "bg-primary/20" : "bg-white/15"}`}>
           <div
@@ -170,6 +156,20 @@ function PlaybackControls({
             style={{ width: `${progress}%` }}
           />
         </div>
+
+        {/* Section markers on the full timeline (above progress bar) */}
+        {!clip && sections && duration > 0 && sections.map((sec, i) => {
+          const left = (sec.startMs / 1000 / duration) * 100
+          const width = ((sec.endMs - sec.startMs) / 1000 / duration) * 100
+          const colors = ["bg-blue-500/50", "bg-emerald-500/50", "bg-amber-500/50", "bg-purple-500/50", "bg-rose-500/50"]
+          return (
+            <div
+              key={i}
+              className={`pointer-events-none absolute top-1/2 h-1.5 -translate-y-1/2 rounded-sm ${colors[i % colors.length]}`}
+              style={{ left: `${left}%`, width: `${width}%` }}
+            />
+          )
+        })}
 
         <input
           type="range"
