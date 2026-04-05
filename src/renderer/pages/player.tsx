@@ -135,6 +135,7 @@ function PlaybackControls({
     <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/60 px-1 py-0.5 shadow-xl backdrop-blur-md transition-all duration-300 hover:border-white/20 hover:bg-black/70">
       <Button
         onClick={onTogglePlayPause}
+        variant="ghost"
         size="icon"
         className={
           isPlaying
@@ -209,6 +210,7 @@ function PlaybackControls({
       <div className="group/vol flex items-center">
         <Button
           onClick={handleToggleMute}
+          variant="ghost"
           size="icon"
           className="size-7 shrink-0 rounded-full border border-transparent text-white shadow-none hover:border-white/10 hover:bg-white/10"
         >
@@ -233,6 +235,7 @@ function PlaybackControls({
 
       <Button
         onClick={onToggleFullscreen}
+        variant="ghost"
         size="icon"
         className="ml-0.5 size-7 shrink-0 rounded-full border border-transparent text-white shadow-none hover:border-white/10 hover:bg-white/10"
       >
