@@ -31,7 +31,13 @@ export function registerWhisperHandlers(): void {
     return {
       groqApiKey: store.get('groqApiKey', ''),
       groqModel: store.get('groqModel', 'whisper-large-v3-turbo') as GroqModel,
+      groqAnalysisApiKey: store.get('groqAnalysisApiKey', ''),
     };
+  });
+
+  ipcMain.handle('whisper:setGroqAnalysisApiKey', (_event, key: string) => {
+    store.set('groqAnalysisApiKey', key);
+    return { success: true };
   });
 
   ipcMain.handle('whisper:setGroqApiKey', (_event, key: string) => {

@@ -20,9 +20,10 @@ interface ElectronAPI {
   onAnalyzerStatus: (callback: (projectId: string, status: string) => void) => () => void;
 
   // Whisper / Groq
-  getBackendSettings: () => Promise<{ groqApiKey: string; groqModel: string }>;
+  getBackendSettings: () => Promise<{ groqApiKey: string; groqModel: string; groqAnalysisApiKey: string }>;
   setGroqApiKey: (key: string) => Promise<{ success: boolean }>;
   setGroqModel: (model: string) => Promise<{ success: boolean }>;
+  setGroqAnalysisApiKey: (key: string) => Promise<{ success: boolean }>;
   transcribe: (projectId: string) => Promise<{ success: boolean; srtPath?: string; error?: string }>;
   readSrt: (projectId: string) => Promise<string | null>;
   onWhisperProgress: (callback: (projectId: string, percent: number) => void) => () => void;

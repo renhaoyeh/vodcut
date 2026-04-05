@@ -34,6 +34,7 @@ interface StoreSchema {
   projects: StoredProject[];
   groqApiKey: string;
   groqModel: GroqModel;
+  groqAnalysisApiKey: string;
 }
 
 export const store = new Store<StoreSchema>({
@@ -41,6 +42,7 @@ export const store = new Store<StoreSchema>({
     projects: [],
     groqApiKey: '',
     groqModel: 'whisper-large-v3-turbo',
+    groqAnalysisApiKey: '',
   },
 });
 

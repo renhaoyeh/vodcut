@@ -15,17 +15,23 @@ import {
 export function SettingsPage() {
   const [groqApiKey, setGroqApiKey] = useState("")
   const [groqModel, setGroqModel] = useState("whisper-large-v3-turbo")
+  const [groqAnalysisApiKey, setGroqAnalysisApiKey] = useState("")
 
   useEffect(() => {
     window.electronAPI.getBackendSettings().then((settings) => {
       setGroqApiKey(settings.groqApiKey)
       setGroqModel(settings.groqModel)
+      setGroqAnalysisApiKey(settings.groqAnalysisApiKey)
     })
   }, [])
 
   const handleApiKeySave = useCallback(async () => {
     await window.electronAPI.setGroqApiKey(groqApiKey)
   }, [groqApiKey])
+
+  const handleAnalysisApiKeySave = useCallback(async () => {
+    await window.electronAPI.setGroqAnalysisApiKey(groqAnalysisApiKey)
+  }, [groqAnalysisApiKey])
 
   const handleGroqModelChange = useCallback(async (value: string) => {
     setGroqModel(value)
@@ -69,6 +75,33 @@ export function SettingsPage() {
             </div>
             <p className="text-xs text-muted-foreground">
               Free tier: 28,800 sec/day. Get your key at{" "}
+              <a href="https://console.groq.com" className="underline" target="_blank" rel="noreferrer">console.groq.com</a>
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Analysis (Groq Cloud API)</CardTitle>
+          <CardDescription>
+            Configure a separate Groq API key for content analysis (LLM).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="groq-analysis-api-key" className="text-sm">API Key</Label>
+            <div className="flex gap-2">
+              <Input
+                id="groq-analysis-api-key"
+                type="password"
+                placeholder="gsk_..."
+                value={groqAnalysisApiKey}
+                onChange={(e) => setGroqAnalysisApiKey(e.target.value)}
+              />
+              <Button size="sm" onClick={handleAnalysisApiKeySave}>Save</Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Uses Llama 3.3 70B for analysis. Get your key at{" "}
               <a href="https://console.groq.com" className="underline" target="_blank" rel="noreferrer">console.groq.com</a>
             </p>
           </div>

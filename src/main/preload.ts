@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getBackendSettings: () => ipcRenderer.invoke('whisper:getBackendSettings'),
   setGroqApiKey: (key: string) => ipcRenderer.invoke('whisper:setGroqApiKey', key),
   setGroqModel: (model: string) => ipcRenderer.invoke('whisper:setGroqModel', model),
+  setGroqAnalysisApiKey: (key: string) => ipcRenderer.invoke('whisper:setGroqAnalysisApiKey', key),
   transcribe: (projectId: string) => ipcRenderer.invoke('whisper:transcribe', projectId),
   readSrt: (projectId: string) => ipcRenderer.invoke('store:readSrt', projectId),
   onWhisperProgress: (callback: (projectId: string, percent: number) => void) => {
