@@ -28,9 +28,14 @@ export interface VideoProject {
   status: "imported" | "converting" | "completed"
 }
 
+interface ProgressInfo {
+  stage: string
+  percent: number
+}
+
 interface ProjectsPageProps {
   projects: VideoProject[]
-  progress: Record<string, number>
+  progress: Record<string, ProgressInfo>
   onAddProjects: (projects: VideoProject[]) => void
   onRemoveProject: (id: string) => void
   onConvertToSrt: (id: string) => void
@@ -142,7 +147,13 @@ export function ProjectsPage({
                     {project.filePath}
                   </p>
                   {progress[project.id] !== undefined && (
-                    <Progress value={progress[project.id]} className="mt-2 h-1.5" />
+                    <div className="mt-2">
+                      <p className="text-xs text-muted-foreground mb-1">
+                        {progress[project.id].stage}
+                        {progress[project.id].percent > 0 && ` ${progress[project.id].percent}%`}
+                      </p>
+                      <Progress value={progress[project.id].percent} className="h-1.5" />
+                    </div>
                   )}
                 </div>
                 <Badge variant={statusVariant[project.status]}>

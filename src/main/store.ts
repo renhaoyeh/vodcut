@@ -1,5 +1,6 @@
 import Store from 'electron-store';
 import { ipcMain } from 'electron';
+import fs from 'fs';
 
 export interface StoredProject {
   id: string;
@@ -55,6 +56,10 @@ export function registerStoreHandlers(): void {
 
   ipcMain.handle('store:removeProject', (_event, id: string) => {
     const current = store.get('projects');
+    const project = current.find((p) => p.id === id);
+    if (project?.audioPath) {
+      try { fs.unlinkSync(project.audioPath); } catch {}
+    }
     store.set('projects', current.filter((p) => p.id !== id));
     return store.get('projects');
   });

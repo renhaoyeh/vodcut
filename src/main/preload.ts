@@ -31,6 +31,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('whisper:progress', listener);
     return () => ipcRenderer.removeListener('whisper:progress', listener);
   },
+  onWhisperStage: (callback: (projectId: string, stage: string) => void) => {
+    const listener = (_event: any, projectId: string, stage: string) => callback(projectId, stage);
+    ipcRenderer.on('whisper:stage', listener);
+    return () => ipcRenderer.removeListener('whisper:stage', listener);
+  },
   onDownloadProgress: (callback: (modelSize: string, percent: number) => void) => {
     const listener = (_event: any, modelSize: string, percent: number) => callback(modelSize, percent);
     ipcRenderer.on('whisper:downloadProgress', listener);

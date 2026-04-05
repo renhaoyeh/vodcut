@@ -176,22 +176,46 @@ export function registerWhisperHandlers(): void {
       // Strip WAV header (44 bytes) to get raw PCM data
       const pcmData = wavBuffer.buffer.slice(44);
 
-      const { promise } = ctx.transcribeData(pcmData, {
-        language: 'zh',
-        temperature: 0.0,
-        onProgress: (progress: number) => {
-          win?.webContents.send('whisper:progress', projectId, progress);
-        },
-      });
+      // Split into 30-second chunks (16kHz, 16-bit mono = 32000 bytes/sec)
+      const CHUNK_SEC = 30;
+      const BYTES_PER_SEC = 16000 * 2;
+      const CHUNK_BYTES = CHUNK_SEC * BYTES_PER_SEC;
+      const totalBytes = pcmData.byteLength;
+      const numChunks = Math.ceil(totalBytes / CHUNK_BYTES);
 
-      const result = await promise;
+      const allSegments: SrtSegment[] = [];
+      let segIdx = 1;
 
-      const srtSegments: SrtSegment[] = result.segments.map((seg, i) => ({
-        index: i + 1,
-        startMs: seg.t0,
-        endMs: seg.t1,
-        text: seg.text.trim(),
-      }));
+      for (let c = 0; c < numChunks; c++) {
+        const start = c * CHUNK_BYTES;
+        const end = Math.min(start + CHUNK_BYTES, totalBytes);
+        const chunkData = pcmData.slice(start, end);
+        const offsetMs = c * CHUNK_SEC * 1000;
+
+        win?.webContents.send('whisper:stage', projectId, `Step 2 辨識中 (${c + 1}/${numChunks})...`);
+
+        const { promise } = ctx.transcribeData(chunkData, {
+          language: 'zh',
+          temperature: 0.0,
+          onProgress: (progress: number) => {
+            const overall = Math.round((c * 100 + progress) / numChunks);
+            win?.webContents.send('whisper:progress', projectId, overall);
+          },
+        });
+
+        const result = await promise;
+
+        for (const seg of result.segments) {
+          allSegments.push({
+            index: segIdx++,
+            startMs: seg.t0 + offsetMs,
+            endMs: seg.t1 + offsetMs,
+            text: seg.text.trim(),
+          });
+        }
+      }
+
+      const srtSegments = allSegments;
 
       const srtContent = segmentsToSrt(srtSegments);
 

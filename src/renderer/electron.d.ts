@@ -30,6 +30,7 @@ interface ElectronAPI {
   transcribe: (projectId: string) => Promise<{ success: boolean; srtPath?: string; error?: string }>;
   releaseModel: () => Promise<void>;
   onWhisperProgress: (callback: (projectId: string, percent: number) => void) => () => void;
+  onWhisperStage: (callback: (projectId: string, stage: string) => void) => () => void;
   onDownloadProgress: (callback: (modelSize: string, percent: number) => void) => () => void;
 }
 

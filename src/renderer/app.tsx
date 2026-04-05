@@ -56,7 +56,7 @@ const pageTitle: Record<Page, string> = {
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>("projects")
   const [projects, setProjects] = useState<VideoProject[]>([])
-  const [progress, setProgress] = useState<Record<string, number>>({})
+  const [progress, setProgress] = useState<Record<string, { stage: string; percent: number }>>({})
 
   const syncProjects = useCallback((stored: any[]) => {
     setProjects(stored.map((p) => ({ ...p, addedAt: new Date(p.addedAt) })))
@@ -68,12 +68,27 @@ function App() {
 
   useEffect(() => {
     const c1 = window.electronAPI.onFfmpegProgress((projectId, percent) => {
-      setProgress((prev) => ({ ...prev, [projectId]: percent }))
+      setProgress((prev) => {
+        const cur = prev[projectId]
+        if (!cur) return prev
+        return { ...prev, [projectId]: { ...cur, percent } }
+      })
     })
     const c2 = window.electronAPI.onWhisperProgress((projectId, percent) => {
-      setProgress((prev) => ({ ...prev, [projectId]: percent }))
+      setProgress((prev) => {
+        const cur = prev[projectId]
+        if (!cur) return prev
+        return { ...prev, [projectId]: { ...cur, percent } }
+      })
     })
-    return () => { c1(); c2() }
+    const c3 = window.electronAPI.onWhisperStage((projectId, stage) => {
+      setProgress((prev) => {
+        const cur = prev[projectId]
+        if (!cur) return prev
+        return { ...prev, [projectId]: { ...cur, stage } }
+      })
+    })
+    return () => { c1(); c2(); c3() }
   }, [])
 
   const handleAddProjects = useCallback((newProjects: VideoProject[]) => {
@@ -95,9 +110,9 @@ function App() {
     }
 
     await window.electronAPI.updateProjectStatus(id, "converting").then(syncProjects)
-    setProgress((prev) => ({ ...prev, [id]: 0 }))
 
     // Step 1: Extract audio
+    setProgress((prev) => ({ ...prev, [id]: { stage: "Step 1 轉換音訊中...", percent: 0 } }))
     const extractResult = await window.electronAPI.extractAudio(id)
     if (!extractResult.success) {
       await window.electronAPI.updateProjectStatus(id, "imported").then(syncProjects)
@@ -106,7 +121,7 @@ function App() {
     }
 
     // Step 2: Transcribe with Whisper
-    setProgress((prev) => ({ ...prev, [id]: 0 }))
+    setProgress((prev) => ({ ...prev, [id]: { stage: "Step 2 辨識中...", percent: 0 } }))
     const transcribeResult = await window.electronAPI.transcribe(id)
     if (!transcribeResult.success) {
       await window.electronAPI.updateProjectStatus(id, "imported").then(syncProjects)
