@@ -32,10 +32,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Settings
   getBackendSettings: () => ipcRenderer.invoke('settings:getAll'),
   setTranscriptionApiKey: (key: string) => ipcRenderer.invoke('settings:setTranscriptionApiKey', key),
-  setTranscriptionModel: (model: string) => ipcRenderer.invoke('settings:setTranscriptionModel', model),
   setGroqApiKey: (key: string) => ipcRenderer.invoke('settings:setGroqApiKey', key),
   setGeminiApiKey: (key: string) => ipcRenderer.invoke('settings:setGeminiApiKey', key),
-  transcribe: (projectId: string) => ipcRenderer.invoke('whisper:transcribe', projectId),
+  transcribe: (projectId: string, model: string) => ipcRenderer.invoke('whisper:transcribe', projectId, model),
   readSrt: (projectId: string) => ipcRenderer.invoke('store:readSrt', projectId),
   onWhisperProgress: (callback: (projectId: string, percent: number) => void) => {
     const listener = (_event: any, projectId: string, percent: number) => callback(projectId, percent);

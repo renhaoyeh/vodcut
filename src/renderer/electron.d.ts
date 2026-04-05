@@ -22,15 +22,13 @@ interface ElectronAPI {
   // Settings
   getBackendSettings: () => Promise<{
     transcriptionApiKey: string;
-    transcriptionModel: string;
     groqApiKey: string;
     geminiApiKey: string;
   }>;
   setTranscriptionApiKey: (key: string) => Promise<{ success: boolean }>;
-  setTranscriptionModel: (model: string) => Promise<{ success: boolean }>;
   setGroqApiKey: (key: string) => Promise<{ success: boolean }>;
   setGeminiApiKey: (key: string) => Promise<{ success: boolean }>;
-  transcribe: (projectId: string) => Promise<{ success: boolean; srtPath?: string; error?: string }>;
+  transcribe: (projectId: string, model: string) => Promise<{ success: boolean; srtPath?: string; error?: string }>;
   readSrt: (projectId: string) => Promise<string | null>;
   onWhisperProgress: (callback: (projectId: string, percent: number) => void) => () => void;
   onWhisperStage: (callback: (projectId: string, stage: string) => void) => () => void;

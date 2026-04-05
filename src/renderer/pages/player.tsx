@@ -1,8 +1,14 @@
 import React, { useEffect, useRef, useState, useCallback } from "react"
-import { ArrowLeft, Maximize, Minimize, Pause, Play, Loader2, Sparkles, ListVideo, Scissors, Volume2, VolumeX } from "lucide-react"
+import { ArrowLeft, Maximize, Minimize, Pause, Play, Loader2, Sparkles, ListVideo, Scissors, Volume2, VolumeX, Mic } from "lucide-react"
 import { Button } from "@/renderer/components/ui/button"
+import { Separator } from "@/renderer/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/renderer/components/ui/select"
 import type { AnalysisData } from "@/main/store"
+
+const TRANSCRIPTION_MODELS = [
+  { value: "whisper-large-v3-turbo", label: "Whisper V3 Turbo" },
+  { value: "whisper-large-v3", label: "Whisper V3" },
+] as const
 
 const ANALYSIS_MODELS = [
   { value: "gemini:gemini-2.5-flash", label: "Gemini 2.5 Flash" },
@@ -298,10 +304,11 @@ interface PlayerPageProps {
   projectId: string
   filePath: string
   fileName: string
+  hasSrt: boolean
   onBack: () => void
 }
 
-export function PlayerPage({ projectId, filePath, fileName, onBack }: PlayerPageProps) {
+export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSrt, onBack }: PlayerPageProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -320,6 +327,14 @@ export function PlayerPage({ projectId, filePath, fileName, onBack }: PlayerPage
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [showControls, setShowControls] = useState(true)
   const [volume, setVolume] = useState(1)
+
+  // Transcription state
+  const [hasSrt, setHasSrt] = useState(initialHasSrt)
+  const [transcribing, setTranscribing] = useState(false)
+  const [transcribeError, setTranscribeError] = useState<string | null>(null)
+  const [transcribeStage, setTranscribeStage] = useState("")
+  const [transcribeProgress, setTranscribeProgress] = useState(0)
+  const [transcriptionModelKey, setTranscriptionModelKey] = useState("whisper-large-v3")
 
   // Analysis state
   const [analysis, setAnalysis] = useState<AnalysisData | null>(null)
@@ -342,7 +357,10 @@ export function PlayerPage({ projectId, filePath, fileName, onBack }: PlayerPage
   // Load SRT + existing analysis
   useEffect(() => {
     window.electronAPI.readSrt(projectId).then((srt) => {
-      if (srt) setSubtitles(parseSrt(srt))
+      if (srt) {
+        setSubtitles(parseSrt(srt))
+        setHasSrt(true)
+      }
     })
     window.electronAPI.getAnalysisData(projectId).then((data) => {
       if (data) {
@@ -351,6 +369,46 @@ export function PlayerPage({ projectId, filePath, fileName, onBack }: PlayerPage
       }
     })
   }, [projectId])
+
+  // Transcription progress listeners
+  useEffect(() => {
+    const c1 = window.electronAPI.onWhisperProgress((pid, pct) => {
+      if (pid === projectId) setTranscribeProgress(pct)
+    })
+    const c2 = window.electronAPI.onWhisperStage((pid, stage) => {
+      if (pid === projectId) setTranscribeStage(stage)
+    })
+    return () => { c1(); c2() }
+  }, [projectId])
+
+  const handleTranscribe = useCallback(async () => {
+    setTranscribing(true)
+    setTranscribeError(null)
+    setTranscribeStage("轉換音訊中...")
+    setTranscribeProgress(0)
+    try {
+      // Step 1: Extract audio
+      const extractResult = await window.electronAPI.extractAudio(projectId)
+      if (!extractResult.success) {
+        setTranscribeError(extractResult.error ?? "Audio extraction failed")
+        return
+      }
+      // Step 2: Transcribe
+      setTranscribeStage("辨識中...")
+      const result = await window.electronAPI.transcribe(projectId, transcriptionModelKey)
+      if (result.success) {
+        const srt = await window.electronAPI.readSrt(projectId)
+        if (srt) setSubtitles(parseSrt(srt))
+        setHasSrt(true)
+      } else {
+        setTranscribeError(result.error ?? "Transcription failed")
+      }
+    } catch (err) {
+      setTranscribeError(String(err))
+    } finally {
+      setTranscribing(false)
+    }
+  }, [projectId, transcriptionModelKey])
 
   const handleAnalyze = useCallback(async () => {
     setAnalyzing(true)
@@ -550,13 +608,50 @@ export function PlayerPage({ projectId, filePath, fileName, onBack }: PlayerPage
             <ArrowLeft className="size-4" />
           </Button>
           <span className="flex-1 truncate text-sm font-medium">{fileName}</span>
+
+          {/* Step 1: Transcription */}
+          {!transcribing && (
+            <div className="flex items-center gap-1">
+              <Select value={transcriptionModelKey} onValueChange={setTranscriptionModelKey}>
+                <SelectTrigger className="h-8 w-40 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TRANSCRIPTION_MODELS.map((m) => (
+                    <SelectItem key={m.value} value={m.value} className="text-xs">
+                      {m.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button variant="outline" size="sm" onClick={handleTranscribe}>
+                <Mic className="mr-1 size-4" />
+                {hasSrt ? "重新轉錄" : "轉錄"}
+              </Button>
+            </div>
+          )}
+          {transcribing && (
+            <div className="flex items-center gap-2">
+              <Loader2 className="size-4 animate-spin" />
+              <span className="text-xs text-muted-foreground">{transcribeStage} {transcribeProgress > 0 ? `${transcribeProgress}%` : ""}</span>
+            </div>
+          )}
+          {transcribeError && (
+            <span className="text-xs text-destructive truncate max-w-48" title={transcribeError}>
+              {transcribeError}
+            </span>
+          )}
+
+          <Separator orientation="vertical" className="h-5" />
+
+          {/* Step 2: Analysis */}
           {analysis && !analyzing && (
             <Button variant="ghost" size="sm" onClick={() => setShowPanel(!showPanel)}>
               <ListVideo className="mr-1 size-4" />
               大綱
             </Button>
           )}
-          {!analyzing && (
+          {!analyzing && hasSrt && (
             <div className="flex items-center gap-1">
               <Select value={analysisModelKey} onValueChange={setAnalysisModelKey}>
                 <SelectTrigger className="h-8 w-44 text-xs">
@@ -583,7 +678,7 @@ export function PlayerPage({ projectId, filePath, fileName, onBack }: PlayerPage
             </Button>
           )}
           {analysisError && (
-            <span className="text-xs text-destructive truncate max-w-60" title={analysisError}>
+            <span className="text-xs text-destructive truncate max-w-48" title={analysisError}>
               {analysisError}
             </span>
           )}

@@ -123,7 +123,7 @@ function App() {
 
     // Step 2: Transcribe with Whisper
     setProgress((prev) => ({ ...prev, [id]: { stage: "Step 2 辨識中...", percent: 0, paused: false } }))
-    const transcribeResult = await window.electronAPI.transcribe(id)
+    const transcribeResult = await window.electronAPI.transcribe(id, "whisper-large-v3")
     if (!transcribeResult.success) {
       await window.electronAPI.updateProjectStatus(id, "imported").then(syncProjects)
     }
@@ -154,7 +154,8 @@ function App() {
             projectId={playerProject.id}
             filePath={playerProject.filePath}
             fileName={playerProject.fileName}
-            onBack={() => setPlayerProject(null)}
+            hasSrt={!!playerProject.srtPath}
+            onBack={() => { setPlayerProject(null); window.electronAPI.getProjects().then(syncProjects) }}
           />
         ) : (
           <>
