@@ -1,24 +1,12 @@
 import { useState, useCallback, useEffect } from "react"
 import { createRoot } from "react-dom/client"
-import {
-  Scissors,
-  FolderOpen,
-  Settings,
-} from "lucide-react"
+import { Scissors } from "lucide-react"
 
 import { ProjectsPage, type VideoProject } from "@/renderer/pages/projects"
-import { SettingsPage } from "@/renderer/pages/settings"
+import { SettingsDialog } from "@/renderer/pages/settings"
 import { PlayerPage } from "@/renderer/pages/player"
 
-type Page = "projects" | "settings"
-
-const navItems = [
-  { title: "Projects", icon: FolderOpen, page: "projects" as Page },
-  { title: "Settings", icon: Settings, page: "settings" as Page },
-]
-
 function App() {
-  const [currentPage, setCurrentPage] = useState<Page>("projects")
   const [projects, setProjects] = useState<VideoProject[]>([])
   const [playerProject, setPlayerProject] = useState<VideoProject | null>(null)
 
@@ -53,22 +41,9 @@ function App() {
           </div>
           <span className="text-sm font-semibold">Vodcut</span>
         </div>
-        <nav className="flex items-center gap-1">
-          {navItems.map((item) => (
-            <button
-              key={item.page}
-              onClick={() => setCurrentPage(item.page)}
-              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors ${
-                currentPage === item.page
-                  ? "bg-muted font-medium"
-                  : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-              }`}
-            >
-              <item.icon className="size-4" />
-              {item.title}
-            </button>
-          ))}
-        </nav>
+        <div className="ml-auto">
+          <SettingsDialog />
+        </div>
       </header>
       <main className="flex flex-1 flex-col overflow-hidden">
         {playerProject ? (
@@ -80,17 +55,12 @@ function App() {
             onBack={() => { setPlayerProject(null); window.electronAPI.getProjects().then(syncProjects) }}
           />
         ) : (
-          <>
-            {currentPage === "projects" && (
-              <ProjectsPage
-                projects={projects}
-                onAddProjects={handleAddProjects}
-                onRemoveProject={handleRemoveProject}
-                onPreview={handlePreview}
-              />
-            )}
-            {currentPage === "settings" && <SettingsPage />}
-          </>
+          <ProjectsPage
+            projects={projects}
+            onAddProjects={handleAddProjects}
+            onRemoveProject={handleRemoveProject}
+            onPreview={handlePreview}
+          />
         )}
       </main>
     </div>

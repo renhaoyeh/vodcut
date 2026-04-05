@@ -4,25 +4,29 @@ import { Button } from "@/renderer/components/ui/button"
 import { Input } from "@/renderer/components/ui/input"
 import { Label } from "@/renderer/components/ui/label"
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/renderer/components/ui/card"
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/renderer/components/ui/dialog"
+import { Settings } from "lucide-react"
 
-export function SettingsPage() {
+export function SettingsDialog() {
+  const [open, setOpen] = useState(false)
   const [transcriptionApiKey, setTranscriptionApiKey] = useState("")
   const [groqApiKey, setGroqApiKey] = useState("")
   const [geminiApiKey, setGeminiApiKey] = useState("")
 
   useEffect(() => {
+    if (!open) return
     window.electronAPI.getBackendSettings().then((s) => {
       setTranscriptionApiKey(s.transcriptionApiKey)
       setGroqApiKey(s.groqApiKey)
       setGeminiApiKey(s.geminiApiKey)
     })
-  }, [])
+  }, [open])
 
   const handleTranscriptionApiKeySave = useCallback(async () => {
     await window.electronAPI.setTranscriptionApiKey(transcriptionApiKey)
@@ -37,13 +41,18 @@ export function SettingsPage() {
   }, [geminiApiKey])
 
   return (
-    <div className="flex flex-1 flex-col gap-4 p-4">
-      <Card>
-        <CardHeader>
-          <CardTitle>API Keys</CardTitle>
-          <CardDescription>Fill in API keys for the services you want to use. Choose model from the player page.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+          <Settings className="size-4" />
+        </button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Settings</DialogTitle>
+          <DialogDescription>API keys for transcription and analysis services.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-5 pt-2">
           <div className="space-y-2">
             <Label htmlFor="transcription-api-key" className="text-sm">Groq Whisper (Transcription)</Label>
             <div className="flex gap-2">
@@ -95,8 +104,8 @@ export function SettingsPage() {
               <a href="https://aistudio.google.com/apikey" className="underline" target="_blank" rel="noreferrer">aistudio.google.com</a>
             </p>
           </div>
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
