@@ -57,7 +57,6 @@ const pageTitle: Record<Page, string> = {
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>("projects")
   const [projects, setProjects] = useState<VideoProject[]>([])
-  const [progress, setProgress] = useState<Record<string, { stage: string; percent: number; paused: boolean }>>({})
   const [playerProject, setPlayerProject] = useState<VideoProject | null>(null)
 
   const syncProjects = useCallback((stored: any[]) => {
@@ -68,31 +67,6 @@ function App() {
     window.electronAPI.getProjects().then(syncProjects)
   }, [syncProjects])
 
-  useEffect(() => {
-    const c1 = window.electronAPI.onFfmpegProgress((projectId, percent) => {
-      setProgress((prev) => {
-        const cur = prev[projectId]
-        if (!cur) return prev
-        return { ...prev, [projectId]: { ...cur, percent } }
-      })
-    })
-    const c2 = window.electronAPI.onWhisperProgress((projectId, percent) => {
-      setProgress((prev) => {
-        const cur = prev[projectId]
-        if (!cur) return prev
-        return { ...prev, [projectId]: { ...cur, percent } }
-      })
-    })
-    const c3 = window.electronAPI.onWhisperStage((projectId, stage) => {
-      setProgress((prev) => {
-        const cur = prev[projectId]
-        if (!cur) return prev
-        return { ...prev, [projectId]: { ...cur, stage } }
-      })
-    })
-    return () => { c1(); c2(); c3() }
-  }, [])
-
   const handleAddProjects = useCallback((newProjects: VideoProject[]) => {
     const toStore = newProjects.map((p) => ({ ...p, addedAt: p.addedAt.toISOString() }))
     window.electronAPI.addProjects(toStore).then(syncProjects)
@@ -101,39 +75,6 @@ function App() {
   const handleRemoveProject = useCallback((id: string) => {
     window.electronAPI.removeProject(id).then(syncProjects)
   }, [syncProjects])
-
-  const handleConvertToSrt = useCallback(async (id: string) => {
-    // Check backend readiness
-    const backendSettings = await window.electronAPI.getBackendSettings()
-    if (!backendSettings.transcriptionApiKey) {
-      setCurrentPage("settings")
-      return
-    }
-
-    await window.electronAPI.updateProjectStatus(id, "converting").then(syncProjects)
-
-    // Step 1: Extract audio
-    setProgress((prev) => ({ ...prev, [id]: { stage: "Step 1 轉換音訊中...", percent: 0, paused: false } }))
-    const extractResult = await window.electronAPI.extractAudio(id)
-    if (!extractResult.success) {
-      await window.electronAPI.updateProjectStatus(id, "imported").then(syncProjects)
-      setProgress((prev) => { const n = { ...prev }; delete n[id]; return n })
-      return
-    }
-
-    // Step 2: Transcribe with Whisper
-    setProgress((prev) => ({ ...prev, [id]: { stage: "Step 2 辨識中...", percent: 0, paused: false } }))
-    const transcribeResult = await window.electronAPI.transcribe(id, "whisper-large-v3")
-    if (!transcribeResult.success) {
-      await window.electronAPI.updateProjectStatus(id, "imported").then(syncProjects)
-    }
-
-    await window.electronAPI.getProjects().then(syncProjects)
-    setProgress((prev) => { const n = { ...prev }; delete n[id]; return n })
-  }, [syncProjects])
-
-  const handlePause = useCallback((_id: string) => {}, [])
-  const handleResume = useCallback((_id: string) => {}, [])
 
   const handlePreview = useCallback((id: string) => {
     const project = projects.find((p) => p.id === id)
@@ -163,12 +104,8 @@ function App() {
             {currentPage === "projects" && (
               <ProjectsPage
                 projects={projects}
-                progress={progress}
                 onAddProjects={handleAddProjects}
                 onRemoveProject={handleRemoveProject}
-                onConvertToSrt={handleConvertToSrt}
-                onPause={handlePause}
-                onResume={handleResume}
                 onPreview={handlePreview}
               />
             )}

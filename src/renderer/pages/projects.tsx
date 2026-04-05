@@ -2,25 +2,16 @@ import React, { useState, useCallback } from "react"
 import {
   FileVideo,
   Upload,
-  MoreHorizontal,
-  FileText,
   Trash2,
-  FolderOpen,
-  Pause,
-  Play,
-  MonitorPlay,
 } from "lucide-react"
 
-import { Button } from "@/renderer/components/ui/button"
 import { Badge } from "@/renderer/components/ui/badge"
-import { Progress } from "@/renderer/components/ui/progress"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/renderer/components/ui/dropdown-menu"
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/renderer/components/ui/context-menu"
 import { ScrollArea } from "@/renderer/components/ui/scroll-area"
 
 export interface VideoProject {
@@ -32,31 +23,17 @@ export interface VideoProject {
   status: "imported" | "converting" | "completed"
 }
 
-interface ProgressInfo {
-  stage: string
-  percent: number
-  paused: boolean
-}
-
 interface ProjectsPageProps {
   projects: VideoProject[]
-  progress: Record<string, ProgressInfo>
   onAddProjects: (projects: VideoProject[]) => void
   onRemoveProject: (id: string) => void
-  onConvertToSrt: (id: string) => void
-  onPause: (id: string) => void
-  onResume: (id: string) => void
   onPreview: (id: string) => void
 }
 
 export function ProjectsPage({
   projects,
-  progress,
   onAddProjects,
   onRemoveProject,
-  onConvertToSrt,
-  onPause,
-  onResume,
   onPreview,
 }: ProjectsPageProps) {
   const [isDragOver, setIsDragOver] = useState(false)
@@ -145,95 +122,36 @@ export function ProjectsPage({
         <ScrollArea className="flex-1">
           <div className="space-y-2">
             {projects.map((project) => (
-              <div
-                key={project.id}
-                className="flex items-center gap-3 rounded-lg border p-3"
-              >
-                <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted">
-                  <FileVideo className="size-5 text-muted-foreground" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{project.fileName}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {project.filePath}
-                  </p>
-                  {progress[project.id] !== undefined && (
-                    <div className="mt-2">
-                      <div className="flex items-center gap-2 mb-1">
-                        <p className="text-xs text-muted-foreground flex-1">
-                          {progress[project.id].paused ? "已暫停" : progress[project.id].stage}
-                          {!progress[project.id].paused && progress[project.id].percent > 0 && ` ${progress[project.id].percent}%`}
-                        </p>
-                        {progress[project.id].stage.includes("辨識中") && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-6"
-                            onClick={() =>
-                              progress[project.id].paused
-                                ? onResume(project.id)
-                                : onPause(project.id)
-                            }
-                          >
-                            {progress[project.id].paused
-                              ? <Play className="size-3" />
-                              : <Pause className="size-3" />}
-                          </Button>
-                        )}
-                      </div>
-                      <Progress value={progress[project.id].percent} className="h-1.5" />
+              <ContextMenu key={project.id}>
+                <ContextMenuTrigger asChild>
+                  <div
+                    className="flex items-center gap-3 rounded-lg border p-3 cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => onPreview(project.id)}
+                  >
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted">
+                      <FileVideo className="size-5 text-muted-foreground" />
                     </div>
-                  )}
-                  {project.status === "converting" && progress[project.id] === undefined && (
-                    <div className="mt-2 flex items-center gap-2">
-                      <p className="text-xs text-muted-foreground">已中斷</p>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-6 text-xs px-2"
-                        onClick={() => onConvertToSrt(project.id)}
-                      >
-                        <Play className="size-3 mr-1" />
-                        繼續轉錄
-                      </Button>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{project.fileName}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {project.filePath}
+                      </p>
                     </div>
-                  )}
-                </div>
-                <Badge variant={project.status === "converting" && !progress[project.id] ? "destructive" : statusVariant[project.status]}>
-                  {project.status === "converting" && !progress[project.id] ? "已中斷" : statusLabel[project.status]}
-                </Badge>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="size-8 shrink-0">
-                      <MoreHorizontal className="size-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    {project.status === "completed" && project.srtPath && (
-                      <DropdownMenuItem onClick={() => onPreview(project.id)}>
-                        <MonitorPlay className="mr-2 size-4" />
-                        Preview
-                      </DropdownMenuItem>
-                    )}
-                    <DropdownMenuItem onClick={() => onConvertToSrt(project.id)}>
-                      <FileText className="mr-2 size-4" />
-                      Convert to SRT
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <FolderOpen className="mr-2 size-4" />
-                      Show in Explorer
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      className="text-destructive"
-                      onClick={() => onRemoveProject(project.id)}
-                    >
-                      <Trash2 className="mr-2 size-4" />
-                      Remove
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+                    <Badge variant={statusVariant[project.status]}>
+                      {statusLabel[project.status]}
+                    </Badge>
+                  </div>
+                </ContextMenuTrigger>
+                <ContextMenuContent>
+                  <ContextMenuItem
+                    className="text-destructive"
+                    onClick={() => onRemoveProject(project.id)}
+                  >
+                    <Trash2 className="mr-2 size-4" />
+                    Delete
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
             ))}
           </div>
         </ScrollArea>
