@@ -1,4 +1,4 @@
-import { app, BrowserWindow, session } from 'electron';
+import { app, BrowserWindow, session, shell } from 'electron';
 import { registerStoreHandlers } from './store';
 import { registerFfmpegHandlers } from './ffmpeg';
 import { registerWhisperHandlers } from './whisper';
@@ -23,6 +23,20 @@ const createWindow = (): void => {
       preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
       webSecurity: false,
     },
+  });
+
+  // Open external links in system browser
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      shell.openExternal(url);
+    }
+    return { action: 'deny' };
+  });
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      event.preventDefault();
+      shell.openExternal(url);
+    }
   });
 
   // and load the index.html of the app.
