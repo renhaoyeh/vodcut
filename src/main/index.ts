@@ -33,7 +33,8 @@ const createWindow = (): void => {
     return { action: 'deny' };
   });
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    if (url.startsWith('http://') || url.startsWith('https://')) {
+    const appOrigin = new URL(MAIN_WINDOW_WEBPACK_ENTRY).origin;
+    if ((url.startsWith('http://') || url.startsWith('https://')) && !url.startsWith(appOrigin)) {
       event.preventDefault();
       shell.openExternal(url);
     }
