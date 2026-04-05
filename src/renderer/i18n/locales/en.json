@@ -10,7 +10,6 @@
     "delete": "Delete"
   },
   "settings": {
-    "languageLabel": "Language",
     "title": "Settings",
     "description": "API keys for transcription and analysis services.",
     "transcriptionLabel": "Groq Whisper (Transcription)",

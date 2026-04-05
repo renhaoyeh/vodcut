@@ -10,7 +10,6 @@
     "delete": "刪除"
   },
   "settings": {
-    "languageLabel": "介面語言",
     "title": "設定",
     "description": "轉錄與分析服務的 API 金鑰。",
     "transcriptionLabel": "Groq Whisper（轉錄）",

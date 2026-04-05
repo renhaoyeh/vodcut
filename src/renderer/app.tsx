@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react"
 import { createRoot } from "react-dom/client"
-import { Scissors, Sun, Moon } from "lucide-react"
+import { useTranslation } from "react-i18next"
+import { Scissors, Sun, Moon, Languages } from "lucide-react"
 
 import "@/renderer/i18n"
 import { ProjectsPage, type VideoProject } from "@/renderer/pages/projects"
@@ -11,6 +12,7 @@ import { Toaster } from "@/renderer/components/ui/sonner"
 function App() {
   const [projects, setProjects] = useState<VideoProject[]>([])
   const [playerProject, setPlayerProject] = useState<VideoProject | null>(null)
+  const { i18n } = useTranslation()
   const [dark, setDark] = useState(() => localStorage.getItem("theme") === "dark")
 
   useEffect(() => {
@@ -50,6 +52,13 @@ function App() {
           <span className="text-sm font-semibold">Vodcut</span>
         </div>
         <div className="ml-auto flex items-center gap-1">
+          <button
+            className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            onClick={() => i18n.changeLanguage(i18n.language === "zh-TW" ? "en" : "zh-TW")}
+            title={i18n.language === "zh-TW" ? "English" : "繁體中文"}
+          >
+            <Languages className="size-4" />
+          </button>
           <button
             className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             onClick={() => setDark((d) => !d)}
