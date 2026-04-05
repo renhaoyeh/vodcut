@@ -630,7 +630,7 @@ export function PlayerPage({ projectId, filePath, fileName, onBack }: PlayerPage
                     ? "border-b-2 border-primary text-primary"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
-                onClick={() => setAnalysisTab("sections")}
+                onClick={() => { setAnalysisTab("sections"); setActiveClip(null) }}
               >
                 <ListVideo className="mr-1 inline size-3.5" />
                 段落 ({analysis.sections.length})
