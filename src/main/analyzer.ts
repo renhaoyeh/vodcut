@@ -228,8 +228,8 @@ export function registerAnalyzerHandlers(): void {
         const allClips: AnalysisClip[] = [];
 
         for (let i = 0; i < chunks.length; i++) {
-          const chunkLabel = chunks.length > 1 ? `（第 ${i + 1}/${chunks.length} 段）` : '';
-          win?.webContents.send('analyzer:status', projectId, `analyzing${chunkLabel}`);
+          const chunkLabel = chunks.length > 1 ? JSON.stringify({ key: 'player.analyzingChunk', current: i + 1, total: chunks.length }) : 'analyzing';
+          win?.webContents.send('analyzer:status', projectId, chunkLabel);
 
           const userMessage = `以下是逐字稿內容${chunkLabel}：\n\n${chunks[i]}`;
           const output = await callLLM(provider, model, SYSTEM_PROMPT, userMessage);

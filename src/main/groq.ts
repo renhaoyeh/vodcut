@@ -138,7 +138,7 @@ export async function transcribeWithGroq(
     let c = saved?.currentChunk ?? 0;
 
     if (saved && c > 0) {
-      win?.webContents.send('whisper:stage', projectId, `Step 2 繼續辨識 (已完成 ${c}/${numChunks})...`);
+      win?.webContents.send('whisper:stage', projectId, JSON.stringify({ key: 'player.resumeRecognizing', current: c, total: numChunks }));
       win?.webContents.send('whisper:progress', projectId, Math.round((c / numChunks) * 100));
     }
 
@@ -149,7 +149,7 @@ export async function transcribeWithGroq(
       const duration = Math.min(CHUNK_SEC, totalSec - startSec);
       const chunkPath = path.join(tmpDir, `vodcut-groq-chunk-${projectId}-${c}.wav`);
 
-      win?.webContents.send('whisper:stage', projectId, `Step 2 辨識中 (${c + 1}/${numChunks})...`);
+      win?.webContents.send('whisper:stage', projectId, JSON.stringify({ key: 'player.recognizingProgress', current: c + 1, total: numChunks }));
       win?.webContents.send('whisper:progress', projectId, Math.round((c / numChunks) * 100));
 
       // Extract chunk WAV
