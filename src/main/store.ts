@@ -1,6 +1,7 @@
 import Store from 'electron-store';
 import { ipcMain } from 'electron';
 import fs from 'fs';
+import path from 'path';
 
 export interface TranscriptionProgress {
   currentChunk: number;
@@ -59,7 +60,30 @@ export function registerStoreHandlers(): void {
 
   ipcMain.handle('store:addProjects', (_event, projects: StoredProject[]) => {
     const current = store.get('projects');
-    store.set('projects', [...current, ...projects]);
+    // Auto-detect existing SRT file next to the video
+    const enriched = projects.map((p) => {
+      const ext = path.extname(p.filePath);
+      const baseName = path.basename(p.filePath, ext);
+      const dir = path.dirname(p.filePath);
+      const srtPath = path.join(dir, baseName + '.srt');
+      const analysisPath = path.join(dir, baseName + '.analysis.json');
+
+      let enriched = { ...p };
+
+      if (fs.existsSync(srtPath)) {
+        enriched = { ...enriched, srtPath, status: 'completed' as const };
+      }
+
+      if (fs.existsSync(analysisPath)) {
+        try {
+          const data = JSON.parse(fs.readFileSync(analysisPath, 'utf8'));
+          enriched = { ...enriched, analysisData: data, analysisPath };
+        } catch {}
+      }
+
+      return enriched;
+    });
+    store.set('projects', [...current, ...enriched]);
     return store.get('projects');
   });
 
