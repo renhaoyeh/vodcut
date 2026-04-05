@@ -1,123 +1,7 @@
-import { initWhisper } from '@fugood/whisper.node';
-import { ipcMain, BrowserWindow, app } from 'electron';
-import path from 'path';
+import { ipcMain, BrowserWindow } from 'electron';
 import fs from 'fs';
-import https from 'https';
-import { getProjectById, updateProject, WHISPER_MODELS, store, type WhisperModelSize, type TranscriptionProgress, type TranscriptionBackend, type GroqModel } from './store';
+import { getProjectById, store, type GroqModel } from './store';
 import { transcribeWithGroq } from './groq';
-
-type WhisperContext = Awaited<ReturnType<typeof initWhisper>>;
-
-let context: WhisperContext | null = null;
-let loadedModelPath: string | null = null;
-let gpuBackend: string = 'unknown';
-
-function getModelsDir(): string {
-  const dir = path.join(app.getPath('userData'), 'models');
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  return dir;
-}
-
-function getModelPath(modelSize: WhisperModelSize): string {
-  return path.join(getModelsDir(), `ggml-${modelSize}.bin`);
-}
-
-function isModelDownloaded(modelSize: WhisperModelSize): boolean {
-  return fs.existsSync(getModelPath(modelSize));
-}
-
-function downloadModel(
-  modelSize: WhisperModelSize,
-  onProgress: (percent: number) => void,
-): Promise<string> {
-  const model = WHISPER_MODELS[modelSize];
-  const outputPath = getModelPath(modelSize);
-  const tmpPath = outputPath + '.tmp';
-
-  return new Promise((resolve, reject) => {
-    const follow = (url: string) => {
-      https.get(url, (res) => {
-        if (res.statusCode === 301 || res.statusCode === 302) {
-          follow(res.headers.location!);
-          return;
-        }
-        if (res.statusCode !== 200) {
-          reject(new Error(`Download failed: HTTP ${res.statusCode}`));
-          return;
-        }
-
-        const totalBytes = parseInt(res.headers['content-length'] || '0', 10);
-        let downloaded = 0;
-
-        const file = fs.createWriteStream(tmpPath);
-        res.on('data', (chunk: Buffer) => {
-          downloaded += chunk.length;
-          if (totalBytes > 0) {
-            onProgress(Math.round((downloaded / totalBytes) * 100));
-          }
-        });
-        res.pipe(file);
-
-        file.on('finish', () => {
-          file.close(() => {
-            fs.renameSync(tmpPath, outputPath);
-            resolve(outputPath);
-          });
-        });
-
-        file.on('error', (err) => {
-          fs.unlinkSync(tmpPath);
-          reject(err);
-        });
-      }).on('error', reject);
-    };
-    follow(model.url);
-  });
-}
-
-async function getContext(modelSize: WhisperModelSize): Promise<WhisperContext> {
-  const modelPath = getModelPath(modelSize);
-
-  if (context && loadedModelPath === modelPath) return context;
-
-  // Release old context if switching models
-  if (context) {
-    await context.release();
-    context = null;
-    loadedModelPath = null;
-  }
-
-  if (!fs.existsSync(modelPath)) {
-    throw new Error(`Model not downloaded. Download it first from Settings.`);
-  }
-
-  console.log('[whisper] Loading model:', modelPath);
-  if (process.platform === 'win32') {
-    // Probe if CUDA native module is actually loadable (not just installed)
-    let hasCuda = false;
-    try {
-      require('@fugood/node-whisper-win32-x64-cuda');
-      hasCuda = true;
-    } catch {}
-
-    if (hasCuda) {
-      context = await initWhisper({ filePath: modelPath, useGpu: true }, 'cuda');
-      gpuBackend = 'cuda';
-    } else {
-      context = await initWhisper({ filePath: modelPath, useGpu: true });
-      gpuBackend = 'cpu';
-    }
-  } else {
-    // macOS: Metal is built into the default variant, useGpu enables it
-    context = await initWhisper({ filePath: modelPath, useGpu: true });
-    gpuBackend = process.platform === 'darwin' ? 'metal' : 'cpu';
-  }
-  loadedModelPath = modelPath;
-  console.log(`[whisper] Model loaded (backend: ${gpuBackend})`);
-  return context;
-}
 
 export interface SrtSegment {
   index: number;
@@ -142,53 +26,12 @@ export function segmentsToSrt(segments: SrtSegment[]): string {
     .join('\n');
 }
 
-interface TranscriptionState {
-  paused: boolean;
-  resumeResolve: (() => void) | null;
-}
-
-const transcriptionState = new Map<string, TranscriptionState>();
-
 export function registerWhisperHandlers(): void {
-  ipcMain.handle('whisper:getModelInfo', () => {
-    const selectedModel = store.get('whisperModel', 'base') as WhisperModelSize;
-    const models = Object.entries(WHISPER_MODELS).map(([key, val]) => ({
-      id: key as WhisperModelSize,
-      ...val,
-      downloaded: isModelDownloaded(key as WhisperModelSize),
-      selected: key === selectedModel,
-    }));
-    return { models, selectedModel, modelsDir: getModelsDir(), gpuBackend };
-  });
-
-  ipcMain.handle('whisper:selectModel', (_event, modelSize: WhisperModelSize) => {
-    store.set('whisperModel', modelSize);
-    return { success: true };
-  });
-
-  ipcMain.handle('whisper:downloadModel', async (event, modelSize: WhisperModelSize) => {
-    const win = BrowserWindow.fromWebContents(event.sender);
-    try {
-      await downloadModel(modelSize, (percent) => {
-        win?.webContents.send('whisper:downloadProgress', modelSize, percent);
-      });
-      return { success: true };
-    } catch (err) {
-      return { success: false, error: (err as Error).message };
-    }
-  });
-
   ipcMain.handle('whisper:getBackendSettings', () => {
     return {
-      backend: store.get('transcriptionBackend', 'local') as TranscriptionBackend,
       groqApiKey: store.get('groqApiKey', ''),
       groqModel: store.get('groqModel', 'whisper-large-v3-turbo') as GroqModel,
     };
-  });
-
-  ipcMain.handle('whisper:setBackend', (_event, backend: TranscriptionBackend) => {
-    store.set('transcriptionBackend', backend);
-    return { success: true };
   });
 
   ipcMain.handle('whisper:setGroqApiKey', (_event, key: string) => {
@@ -213,124 +56,12 @@ export function registerWhisperHandlers(): void {
       return { success: false, error: `Audio file not found: ${project.audioPath}` };
     }
 
-    const backend = store.get('transcriptionBackend', 'local') as TranscriptionBackend;
-    if (backend === 'groq') {
-      const apiKey = store.get('groqApiKey', '') as string;
-      if (!apiKey) {
-        return { success: false, error: 'Groq API key not configured. Set it in Settings.' };
-      }
-      const groqModel = store.get('groqModel', 'whisper-large-v3-turbo') as GroqModel;
-      const win = BrowserWindow.fromWebContents(event.sender);
-      return transcribeWithGroq(projectId, project.audioPath!, apiKey, groqModel, win);
+    const apiKey = store.get('groqApiKey', '') as string;
+    if (!apiKey) {
+      return { success: false, error: 'Groq API key not configured. Set it in Settings.' };
     }
-
-    const selectedModel = store.get('whisperModel', 'base') as WhisperModelSize;
+    const groqModel = store.get('groqModel', 'whisper-large-v3-turbo') as GroqModel;
     const win = BrowserWindow.fromWebContents(event.sender);
-
-    try {
-      const ctx = await getContext(selectedModel);
-
-      // Read WAV as buffer to bypass Unicode path issues with transcribeFile
-      const wavBuffer = fs.readFileSync(project.audioPath);
-      // Strip WAV header (44 bytes) to get raw PCM data
-      const pcmData = wavBuffer.buffer.slice(44);
-
-      // Split into 30-second chunks (16kHz, 16-bit mono = 32000 bytes/sec)
-      const CHUNK_SEC = 30;
-      const BYTES_PER_SEC = 16000 * 2;
-      const CHUNK_BYTES = CHUNK_SEC * BYTES_PER_SEC;
-      const totalBytes = pcmData.byteLength;
-      const numChunks = Math.ceil(totalBytes / CHUNK_BYTES);
-
-      // Resume from saved progress if available
-      const saved = project.transcriptionProgress;
-      const allSegments: SrtSegment[] = saved?.segments ?? [];
-      let segIdx = saved?.segIdx ?? 1;
-      let c = saved?.currentChunk ?? 0;
-
-      const state: TranscriptionState = { paused: false, resumeResolve: null };
-      transcriptionState.set(projectId, state);
-
-      while (c < numChunks) {
-        // Wait if paused (between chunks)
-        if (state.paused) {
-          await new Promise<void>((resolve) => { state.resumeResolve = resolve; });
-        }
-
-        const start = c * CHUNK_BYTES;
-        const end = Math.min(start + CHUNK_BYTES, totalBytes);
-        const chunkData = pcmData.slice(start, end);
-        const offsetMs = c * CHUNK_SEC * 1000;
-
-        win?.webContents.send('whisper:stage', projectId, `Step 2 辨識中 (${c + 1}/${numChunks})...`);
-
-        const { promise } = ctx.transcribeData(chunkData, {
-          language: 'zh',
-          temperature: 0.0,
-          onProgress: (progress: number) => {
-            const overall = Math.round((c * 100 + progress) / numChunks);
-            win?.webContents.send('whisper:progress', projectId, overall);
-          },
-        });
-
-        const result = await promise;
-
-        for (const seg of result.segments) {
-          allSegments.push({
-            index: segIdx++,
-            startMs: seg.t0 + offsetMs,
-            endMs: seg.t1 + offsetMs,
-            text: seg.text.trim(),
-          });
-        }
-        c++;
-
-        // Persist progress after each chunk
-        updateProject(projectId, {
-          transcriptionProgress: { currentChunk: c, numChunks, segments: allSegments, segIdx },
-        });
-      }
-
-      transcriptionState.delete(projectId);
-      const srtSegments = allSegments;
-
-      const srtContent = segmentsToSrt(srtSegments);
-
-      // Save SRT next to original video
-      const videoDir = path.dirname(project.filePath);
-      const videoName = path.basename(project.filePath, path.extname(project.filePath));
-      const srtPath = path.join(videoDir, `${videoName}.srt`);
-      fs.writeFileSync(srtPath, srtContent, 'utf8');
-
-      updateProject(projectId, { status: 'completed', srtPath, transcriptionProgress: undefined });
-
-      return { success: true, srtPath, segments: srtSegments };
-    } catch (err) {
-      return { success: false, error: (err as Error).message };
-    }
-  });
-
-  ipcMain.handle('whisper:pause', (_event, projectId: string) => {
-    const state = transcriptionState.get(projectId);
-    if (state) {
-      state.paused = true;
-    }
-  });
-
-  ipcMain.handle('whisper:resume', (_event, projectId: string) => {
-    const state = transcriptionState.get(projectId);
-    if (state && state.paused) {
-      state.paused = false;
-      state.resumeResolve?.();
-      state.resumeResolve = null;
-    }
-  });
-
-  ipcMain.handle('whisper:releaseModel', async () => {
-    if (context) {
-      await context.release();
-      context = null;
-      loadedModelPath = null;
-    }
+    return transcribeWithGroq(projectId, project.audioPath!, apiKey, groqModel, win);
   });
 }

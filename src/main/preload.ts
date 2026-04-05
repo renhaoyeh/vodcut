@@ -20,18 +20,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('ffmpeg:progress', listener);
   },
 
-  // Whisper
-  getModelInfo: () => ipcRenderer.invoke('whisper:getModelInfo'),
-  selectModel: (modelSize: string) => ipcRenderer.invoke('whisper:selectModel', modelSize),
+  // Whisper / Groq
   getBackendSettings: () => ipcRenderer.invoke('whisper:getBackendSettings'),
-  setBackend: (backend: string) => ipcRenderer.invoke('whisper:setBackend', backend),
   setGroqApiKey: (key: string) => ipcRenderer.invoke('whisper:setGroqApiKey', key),
   setGroqModel: (model: string) => ipcRenderer.invoke('whisper:setGroqModel', model),
-  downloadModel: (modelSize: string) => ipcRenderer.invoke('whisper:downloadModel', modelSize),
   transcribe: (projectId: string) => ipcRenderer.invoke('whisper:transcribe', projectId),
-  pauseTranscription: (projectId: string) => ipcRenderer.invoke('whisper:pause', projectId),
-  resumeTranscription: (projectId: string) => ipcRenderer.invoke('whisper:resume', projectId),
-  releaseModel: () => ipcRenderer.invoke('whisper:releaseModel'),
   readSrt: (projectId: string) => ipcRenderer.invoke('store:readSrt', projectId),
   onWhisperProgress: (callback: (projectId: string, percent: number) => void) => {
     const listener = (_event: any, projectId: string, percent: number) => callback(projectId, percent);
@@ -42,10 +35,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const listener = (_event: any, projectId: string, stage: string) => callback(projectId, stage);
     ipcRenderer.on('whisper:stage', listener);
     return () => ipcRenderer.removeListener('whisper:stage', listener);
-  },
-  onDownloadProgress: (callback: (modelSize: string, percent: number) => void) => {
-    const listener = (_event: any, modelSize: string, percent: number) => callback(modelSize, percent);
-    ipcRenderer.on('whisper:downloadProgress', listener);
-    return () => ipcRenderer.removeListener('whisper:downloadProgress', listener);
   },
 });

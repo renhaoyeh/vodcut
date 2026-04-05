@@ -1,14 +1,5 @@
 import type { StoredProject } from '../main/store';
 
-interface ModelInfo {
-  id: string;
-  label: string;
-  size: string;
-  url: string;
-  downloaded: boolean;
-  selected: boolean;
-}
-
 interface ElectronAPI {
   // Store
   getProjects: () => Promise<StoredProject[]>;
@@ -23,22 +14,14 @@ interface ElectronAPI {
   extractAudio: (projectId: string) => Promise<{ success: boolean; audioPath?: string; error?: string }>;
   onFfmpegProgress: (callback: (projectId: string, percent: number) => void) => () => void;
 
-  // Whisper
-  getModelInfo: () => Promise<{ models: ModelInfo[]; selectedModel: string; modelsDir: string; gpuBackend: string }>;
-  selectModel: (modelSize: string) => Promise<{ success: boolean }>;
-  getBackendSettings: () => Promise<{ backend: string; groqApiKey: string; groqModel: string }>;
-  setBackend: (backend: string) => Promise<{ success: boolean }>;
+  // Whisper / Groq
+  getBackendSettings: () => Promise<{ groqApiKey: string; groqModel: string }>;
   setGroqApiKey: (key: string) => Promise<{ success: boolean }>;
   setGroqModel: (model: string) => Promise<{ success: boolean }>;
-  downloadModel: (modelSize: string) => Promise<{ success: boolean; error?: string }>;
   transcribe: (projectId: string) => Promise<{ success: boolean; srtPath?: string; error?: string }>;
-  pauseTranscription: (projectId: string) => Promise<void>;
-  resumeTranscription: (projectId: string) => Promise<void>;
-  releaseModel: () => Promise<void>;
   readSrt: (projectId: string) => Promise<string | null>;
   onWhisperProgress: (callback: (projectId: string, percent: number) => void) => () => void;
   onWhisperStage: (callback: (projectId: string, stage: string) => void) => () => void;
-  onDownloadProgress: (callback: (modelSize: string, percent: number) => void) => () => void;
 }
 
 declare global {

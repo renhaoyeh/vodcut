@@ -6,7 +6,6 @@ import { plugins } from './webpack.plugins';
 export const mainConfig: Configuration = {
   externals: {
     'ffmpeg-static': 'commonjs2 ffmpeg-static',
-    '@fugood/whisper.node': 'commonjs2 @fugood/whisper.node',
   },
   /**
    * This is the main entry point for your application, it's the first file

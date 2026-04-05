@@ -105,18 +105,9 @@ function App() {
   const handleConvertToSrt = useCallback(async (id: string) => {
     // Check backend readiness
     const backendSettings = await window.electronAPI.getBackendSettings()
-    if (backendSettings.backend === "local") {
-      const modelInfo = await window.electronAPI.getModelInfo()
-      const selected = modelInfo.models.find((m) => m.selected)
-      if (!selected?.downloaded) {
-        setCurrentPage("settings")
-        return
-      }
-    } else if (backendSettings.backend === "groq") {
-      if (!backendSettings.groqApiKey) {
-        setCurrentPage("settings")
-        return
-      }
+    if (!backendSettings.groqApiKey) {
+      setCurrentPage("settings")
+      return
     }
 
     await window.electronAPI.updateProjectStatus(id, "converting").then(syncProjects)
@@ -141,23 +132,8 @@ function App() {
     setProgress((prev) => { const n = { ...prev }; delete n[id]; return n })
   }, [syncProjects])
 
-  const handlePause = useCallback(async (id: string) => {
-    await window.electronAPI.pauseTranscription(id)
-    setProgress((prev) => {
-      const cur = prev[id]
-      if (!cur) return prev
-      return { ...prev, [id]: { ...cur, paused: true } }
-    })
-  }, [])
-
-  const handleResume = useCallback(async (id: string) => {
-    await window.electronAPI.resumeTranscription(id)
-    setProgress((prev) => {
-      const cur = prev[id]
-      if (!cur) return prev
-      return { ...prev, [id]: { ...cur, paused: false } }
-    })
-  }, [])
+  const handlePause = useCallback((_id: string) => {}, [])
+  const handleResume = useCallback((_id: string) => {}, [])
 
   const handlePreview = useCallback((id: string) => {
     const project = projects.find((p) => p.id === id)

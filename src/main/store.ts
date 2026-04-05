@@ -20,22 +20,10 @@ export interface StoredProject {
   transcriptionProgress?: TranscriptionProgress;
 }
 
-export type WhisperModelSize = 'tiny' | 'base' | 'small' | 'medium' | 'large-v3-turbo';
-export type TranscriptionBackend = 'local' | 'groq';
 export type GroqModel = 'whisper-large-v3' | 'whisper-large-v3-turbo';
-
-export const WHISPER_MODELS: Record<WhisperModelSize, { label: string; size: string; url: string }> = {
-  'tiny':             { label: 'Tiny',              size: '75 MB',   url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin' },
-  'base':             { label: 'Base',              size: '142 MB',  url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin' },
-  'small':            { label: 'Small',             size: '466 MB',  url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin' },
-  'medium':           { label: 'Medium',            size: '1.5 GB',  url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin' },
-  'large-v3-turbo':   { label: 'Large V3 Turbo',    size: '1.6 GB',  url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin' },
-};
 
 interface StoreSchema {
   projects: StoredProject[];
-  whisperModel: WhisperModelSize;
-  transcriptionBackend: TranscriptionBackend;
   groqApiKey: string;
   groqModel: GroqModel;
 }
@@ -43,8 +31,6 @@ interface StoreSchema {
 export const store = new Store<StoreSchema>({
   defaults: {
     projects: [],
-    whisperModel: 'base',
-    transcriptionBackend: 'local',
     groqApiKey: '',
     groqModel: 'whisper-large-v3-turbo',
   },
