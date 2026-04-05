@@ -29,20 +29,6 @@ interface Subtitle {
   text: string
 }
 
-function formatSrtTimestamp(ms: number): string {
-  const h = Math.floor(ms / 3600000)
-  const m = Math.floor((ms % 3600000) / 60000)
-  const s = Math.floor((ms % 60000) / 1000)
-  const milli = ms % 1000
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")},${String(milli).padStart(3, "0")}`
-}
-
-function subtitlesToSrt(subs: Subtitle[]): string {
-  return subs
-    .map((s, i) => `${i + 1}\n${formatSrtTimestamp(s.startMs)} --> ${formatSrtTimestamp(s.endMs)}\n${s.text}\n`)
-    .join("\n")
-}
-
 function parseSrt(srt: string): Subtitle[] {
   const blocks = srt.trim().split(/\n\s*\n/)
   const subs: Subtitle[] = []
@@ -867,20 +853,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                       <span className="text-[10px] tabular-nums text-muted-foreground">
                         {formatMs(sub.startMs)} – {formatMs(sub.endMs)}
                       </span>
-                      <textarea
-                        className="mt-0.5 w-full resize-none bg-transparent text-sm outline-none focus:ring-1 focus:ring-primary/50 rounded px-1"
-                        rows={1}
-                        value={sub.text}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => {
-                          const updated = [...subtitles]
-                          updated[i] = { ...updated[i], text: e.target.value }
-                          setSubtitles(updated)
-                        }}
-                        onBlur={() => {
-                          window.electronAPI.saveSrt(projectId, subtitlesToSrt(subtitles))
-                        }}
-                      />
+                      <p className="mt-0.5 text-sm">{sub.text}</p>
                     </div>
                   )
                 })}
