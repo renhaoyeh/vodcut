@@ -108,6 +108,11 @@ export function registerFfmpegHandlers(): void {
     if (!project) {
       return { success: false, error: 'Project not found' };
     }
+    // Skip if audio already extracted
+    if (project.audioPath && fs.existsSync(project.audioPath)) {
+      return { success: true, audioPath: project.audioPath };
+    }
+
     const win = BrowserWindow.fromWebContents(event.sender);
     try {
       const audioPath = await extractAudio(project.filePath, (percent) => {

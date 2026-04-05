@@ -6,6 +6,8 @@ import {
   FileText,
   Trash2,
   FolderOpen,
+  Pause,
+  Play,
 } from "lucide-react"
 
 import { Button } from "@/renderer/components/ui/button"
@@ -31,6 +33,7 @@ export interface VideoProject {
 interface ProgressInfo {
   stage: string
   percent: number
+  paused: boolean
 }
 
 interface ProjectsPageProps {
@@ -39,6 +42,8 @@ interface ProjectsPageProps {
   onAddProjects: (projects: VideoProject[]) => void
   onRemoveProject: (id: string) => void
   onConvertToSrt: (id: string) => void
+  onPause: (id: string) => void
+  onResume: (id: string) => void
 }
 
 export function ProjectsPage({
@@ -47,6 +52,8 @@ export function ProjectsPage({
   onAddProjects,
   onRemoveProject,
   onConvertToSrt,
+  onPause,
+  onResume,
 }: ProjectsPageProps) {
   const [isDragOver, setIsDragOver] = useState(false)
 
@@ -148,16 +155,48 @@ export function ProjectsPage({
                   </p>
                   {progress[project.id] !== undefined && (
                     <div className="mt-2">
-                      <p className="text-xs text-muted-foreground mb-1">
-                        {progress[project.id].stage}
-                        {progress[project.id].percent > 0 && ` ${progress[project.id].percent}%`}
-                      </p>
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="text-xs text-muted-foreground flex-1">
+                          {progress[project.id].paused ? "已暫停" : progress[project.id].stage}
+                          {!progress[project.id].paused && progress[project.id].percent > 0 && ` ${progress[project.id].percent}%`}
+                        </p>
+                        {progress[project.id].stage.includes("辨識中") && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-6"
+                            onClick={() =>
+                              progress[project.id].paused
+                                ? onResume(project.id)
+                                : onPause(project.id)
+                            }
+                          >
+                            {progress[project.id].paused
+                              ? <Play className="size-3" />
+                              : <Pause className="size-3" />}
+                          </Button>
+                        )}
+                      </div>
                       <Progress value={progress[project.id].percent} className="h-1.5" />
                     </div>
                   )}
+                  {project.status === "converting" && progress[project.id] === undefined && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <p className="text-xs text-muted-foreground">已中斷</p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-6 text-xs px-2"
+                        onClick={() => onConvertToSrt(project.id)}
+                      >
+                        <Play className="size-3 mr-1" />
+                        繼續轉錄
+                      </Button>
+                    </div>
+                  )}
                 </div>
-                <Badge variant={statusVariant[project.status]}>
-                  {statusLabel[project.status]}
+                <Badge variant={project.status === "converting" && !progress[project.id] ? "destructive" : statusVariant[project.status]}>
+                  {project.status === "converting" && !progress[project.id] ? "已中斷" : statusLabel[project.status]}
                 </Badge>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>

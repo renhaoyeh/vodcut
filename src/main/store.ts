@@ -2,6 +2,13 @@ import Store from 'electron-store';
 import { ipcMain } from 'electron';
 import fs from 'fs';
 
+export interface TranscriptionProgress {
+  currentChunk: number;
+  numChunks: number;
+  segments: Array<{ index: number; startMs: number; endMs: number; text: string }>;
+  segIdx: number;
+}
+
 export interface StoredProject {
   id: string;
   fileName: string;
@@ -10,6 +17,7 @@ export interface StoredProject {
   srtPath?: string;
   addedAt: string;
   status: 'imported' | 'converting' | 'completed';
+  transcriptionProgress?: TranscriptionProgress;
 }
 
 export type WhisperModelSize = 'tiny' | 'base' | 'small' | 'medium' | 'large-v3-turbo';

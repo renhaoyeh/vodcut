@@ -56,7 +56,7 @@ const pageTitle: Record<Page, string> = {
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>("projects")
   const [projects, setProjects] = useState<VideoProject[]>([])
-  const [progress, setProgress] = useState<Record<string, { stage: string; percent: number }>>({})
+  const [progress, setProgress] = useState<Record<string, { stage: string; percent: number; paused: boolean }>>({})
 
   const syncProjects = useCallback((stored: any[]) => {
     setProjects(stored.map((p) => ({ ...p, addedAt: new Date(p.addedAt) })))
@@ -112,7 +112,7 @@ function App() {
     await window.electronAPI.updateProjectStatus(id, "converting").then(syncProjects)
 
     // Step 1: Extract audio
-    setProgress((prev) => ({ ...prev, [id]: { stage: "Step 1 轉換音訊中...", percent: 0 } }))
+    setProgress((prev) => ({ ...prev, [id]: { stage: "Step 1 轉換音訊中...", percent: 0, paused: false } }))
     const extractResult = await window.electronAPI.extractAudio(id)
     if (!extractResult.success) {
       await window.electronAPI.updateProjectStatus(id, "imported").then(syncProjects)
@@ -121,7 +121,7 @@ function App() {
     }
 
     // Step 2: Transcribe with Whisper
-    setProgress((prev) => ({ ...prev, [id]: { stage: "Step 2 辨識中...", percent: 0 } }))
+    setProgress((prev) => ({ ...prev, [id]: { stage: "Step 2 辨識中...", percent: 0, paused: false } }))
     const transcribeResult = await window.electronAPI.transcribe(id)
     if (!transcribeResult.success) {
       await window.electronAPI.updateProjectStatus(id, "imported").then(syncProjects)
@@ -130,6 +130,24 @@ function App() {
     await window.electronAPI.getProjects().then(syncProjects)
     setProgress((prev) => { const n = { ...prev }; delete n[id]; return n })
   }, [syncProjects])
+
+  const handlePause = useCallback(async (id: string) => {
+    await window.electronAPI.pauseTranscription(id)
+    setProgress((prev) => {
+      const cur = prev[id]
+      if (!cur) return prev
+      return { ...prev, [id]: { ...cur, paused: true } }
+    })
+  }, [])
+
+  const handleResume = useCallback(async (id: string) => {
+    await window.electronAPI.resumeTranscription(id)
+    setProgress((prev) => {
+      const cur = prev[id]
+      if (!cur) return prev
+      return { ...prev, [id]: { ...cur, paused: false } }
+    })
+  }, [])
 
   return (
     <SidebarProvider>
@@ -148,6 +166,8 @@ function App() {
             onAddProjects={handleAddProjects}
             onRemoveProject={handleRemoveProject}
             onConvertToSrt={handleConvertToSrt}
+            onPause={handlePause}
+            onResume={handleResume}
           />
         )}
         {currentPage === "settings" && <SettingsPage />}

@@ -25,6 +25,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   selectModel: (modelSize: string) => ipcRenderer.invoke('whisper:selectModel', modelSize),
   downloadModel: (modelSize: string) => ipcRenderer.invoke('whisper:downloadModel', modelSize),
   transcribe: (projectId: string) => ipcRenderer.invoke('whisper:transcribe', projectId),
+  pauseTranscription: (projectId: string) => ipcRenderer.invoke('whisper:pause', projectId),
+  resumeTranscription: (projectId: string) => ipcRenderer.invoke('whisper:resume', projectId),
   releaseModel: () => ipcRenderer.invoke('whisper:releaseModel'),
   onWhisperProgress: (callback: (projectId: string, percent: number) => void) => {
     const listener = (_event: any, projectId: string, percent: number) => callback(projectId, percent);

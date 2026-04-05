@@ -3,7 +3,7 @@ import { ipcMain, BrowserWindow, app } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import https from 'https';
-import { getProjectById, updateProject, WHISPER_MODELS, type WhisperModelSize } from './store';
+import { getProjectById, updateProject, WHISPER_MODELS, type WhisperModelSize, type TranscriptionProgress } from './store';
 import Store from 'electron-store';
 
 type WhisperContext = Awaited<ReturnType<typeof initWhisper>>;
@@ -124,6 +124,13 @@ function segmentsToSrt(segments: SrtSegment[]): string {
     .join('\n');
 }
 
+interface TranscriptionState {
+  paused: boolean;
+  resumeResolve: (() => void) | null;
+}
+
+const transcriptionState = new Map<string, TranscriptionState>();
+
 export function registerWhisperHandlers(): void {
   ipcMain.handle('whisper:getModelInfo', () => {
     const selectedModel = store.get('whisperModel', 'base') as WhisperModelSize;
@@ -183,10 +190,21 @@ export function registerWhisperHandlers(): void {
       const totalBytes = pcmData.byteLength;
       const numChunks = Math.ceil(totalBytes / CHUNK_BYTES);
 
-      const allSegments: SrtSegment[] = [];
-      let segIdx = 1;
+      // Resume from saved progress if available
+      const saved = project.transcriptionProgress;
+      const allSegments: SrtSegment[] = saved?.segments ?? [];
+      let segIdx = saved?.segIdx ?? 1;
+      let c = saved?.currentChunk ?? 0;
 
-      for (let c = 0; c < numChunks; c++) {
+      const state: TranscriptionState = { paused: false, resumeResolve: null };
+      transcriptionState.set(projectId, state);
+
+      while (c < numChunks) {
+        // Wait if paused (between chunks)
+        if (state.paused) {
+          await new Promise<void>((resolve) => { state.resumeResolve = resolve; });
+        }
+
         const start = c * CHUNK_BYTES;
         const end = Math.min(start + CHUNK_BYTES, totalBytes);
         const chunkData = pcmData.slice(start, end);
@@ -213,8 +231,15 @@ export function registerWhisperHandlers(): void {
             text: seg.text.trim(),
           });
         }
+        c++;
+
+        // Persist progress after each chunk
+        updateProject(projectId, {
+          transcriptionProgress: { currentChunk: c, numChunks, segments: allSegments, segIdx },
+        });
       }
 
+      transcriptionState.delete(projectId);
       const srtSegments = allSegments;
 
       const srtContent = segmentsToSrt(srtSegments);
@@ -225,11 +250,27 @@ export function registerWhisperHandlers(): void {
       const srtPath = path.join(videoDir, `${videoName}.srt`);
       fs.writeFileSync(srtPath, srtContent, 'utf8');
 
-      updateProject(projectId, { status: 'completed', srtPath });
+      updateProject(projectId, { status: 'completed', srtPath, transcriptionProgress: undefined });
 
       return { success: true, srtPath, segments: srtSegments };
     } catch (err) {
       return { success: false, error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle('whisper:pause', (_event, projectId: string) => {
+    const state = transcriptionState.get(projectId);
+    if (state) {
+      state.paused = true;
+    }
+  });
+
+  ipcMain.handle('whisper:resume', (_event, projectId: string) => {
+    const state = transcriptionState.get(projectId);
+    if (state && state.paused) {
+      state.paused = false;
+      state.resumeResolve?.();
+      state.resumeResolve = null;
     }
   });
 
