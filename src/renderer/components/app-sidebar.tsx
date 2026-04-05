@@ -1,11 +1,9 @@
 import {
   LayoutDashboard,
-  Film,
   FolderOpen,
-  Scissors,
   Settings,
   HelpCircle,
-  Video,
+  Scissors,
 } from "lucide-react"
 
 import {
@@ -23,12 +21,11 @@ import {
   SidebarSeparator,
 } from "@/renderer/components/ui/sidebar"
 
+export type Page = "dashboard" | "projects"
+
 const mainNav = [
-  { title: "Dashboard", icon: LayoutDashboard, isActive: true },
-  { title: "Projects", icon: FolderOpen },
-  { title: "Media Library", icon: Film },
-  { title: "Editor", icon: Scissors },
-  { title: "Export", icon: Video },
+  { title: "Dashboard", icon: LayoutDashboard, page: "dashboard" as Page },
+  { title: "Projects", icon: FolderOpen, page: "projects" as Page },
 ]
 
 const secondaryNav = [
@@ -36,7 +33,12 @@ const secondaryNav = [
   { title: "Help", icon: HelpCircle },
 ]
 
-export function AppSidebar() {
+interface AppSidebarProps {
+  currentPage: Page
+  onNavigate: (page: Page) => void
+}
+
+export function AppSidebar({ currentPage, onNavigate }: AppSidebarProps) {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
@@ -62,7 +64,11 @@ export function AppSidebar() {
             <SidebarMenu>
               {mainNav.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton isActive={item.isActive} tooltip={item.title}>
+                  <SidebarMenuButton
+                    isActive={currentPage === item.page}
+                    tooltip={item.title}
+                    onClick={() => onNavigate(item.page)}
+                  >
                     <item.icon />
                     <span>{item.title}</span>
                   </SidebarMenuButton>
