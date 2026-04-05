@@ -12,6 +12,7 @@ import {
   DialogTrigger,
 } from "@/renderer/components/ui/dialog"
 import { Settings } from "lucide-react"
+import { toast } from "sonner"
 
 export function SettingsDialog() {
   const [open, setOpen] = useState(false)
@@ -31,14 +32,17 @@ export function SettingsDialog() {
   const handleTranscriptionApiKeysSave = useCallback(async () => {
     const keys = transcriptionApiKeys.split("\n").map(k => k.trim()).filter(Boolean)
     await window.electronAPI.setTranscriptionApiKeys(keys)
+    toast.success("已儲存", { duration: 1500 })
   }, [transcriptionApiKeys])
 
   const handleGroqApiKeySave = useCallback(async () => {
     await window.electronAPI.setGroqApiKey(groqApiKey)
+    toast.success("已儲存", { duration: 1500 })
   }, [groqApiKey])
 
   const handleGeminiApiKeySave = useCallback(async () => {
     await window.electronAPI.setGeminiApiKey(geminiApiKey)
+    toast.success("已儲存", { duration: 1500 })
   }, [geminiApiKey])
 
   return (
