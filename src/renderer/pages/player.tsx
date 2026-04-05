@@ -366,6 +366,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
   const [transcribeStage, setTranscribeStage] = useState("")
   const [transcribeProgress, setTranscribeProgress] = useState(0)
   const [transcriptionModelKey, setTranscriptionModelKey] = useState("whisper-large-v3")
+  const [savedProgress, setSavedProgress] = useState<{ current: number; total: number } | null>(null)
 
   // Analysis state
   const [analysis, setAnalysis] = useState<AnalysisData | null>(null)
@@ -388,12 +389,17 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
   subtitlesRef.current = subtitles
   const handlersRef = useRef<ReturnType<typeof createVideoEventHandlers> | null>(null)
 
-  // Load API key availability
+  // Load API key availability + saved transcription progress
   useEffect(() => {
     window.electronAPI.getBackendSettings().then((s) => {
       setHasTranscriptionKey(s.transcriptionApiKeys?.length > 0)
       setHasGroqKey(!!s.groqApiKey)
       setHasGeminiKey(!!s.geminiApiKey)
+    })
+    window.electronAPI.getTranscriptionProgress(projectId).then((p) => {
+      if (p && p.currentChunk < p.numChunks) {
+        setSavedProgress({ current: p.currentChunk, total: p.numChunks })
+      }
     })
   }, [])
 
@@ -427,6 +433,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
 
   const handleTranscribe = useCallback(async () => {
     setTranscribing(true)
+    setSavedProgress(null)
     // error shown via toast
     setTranscribeStage("轉換音訊中...")
     setTranscribeProgress(0)
@@ -675,7 +682,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                   title={!hasTranscriptionKey ? "請先在 Settings 填入 Groq Whisper API Key" : undefined}
                 >
                   <Mic className="mr-1 size-4" />
-                  {hasSrt ? "重新轉錄" : "轉錄"}
+                  {savedProgress ? `繼續轉錄 (${savedProgress.current}/${savedProgress.total})` : hasSrt ? "重新轉錄" : "轉錄"}
                 </Button>
               </>
             ) : (

@@ -137,6 +137,11 @@ export async function transcribeWithGroq(
     let segIdx = saved?.segIdx ?? 1;
     let c = saved?.currentChunk ?? 0;
 
+    if (saved && c > 0) {
+      win?.webContents.send('whisper:stage', projectId, `Step 2 繼續辨識 (已完成 ${c}/${numChunks})...`);
+      win?.webContents.send('whisper:progress', projectId, Math.round((c / numChunks) * 100));
+    }
+
     const tmpDir = app.getPath('temp');
 
     while (c < numChunks) {

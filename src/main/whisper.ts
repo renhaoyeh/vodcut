@@ -1,7 +1,7 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import fs from 'fs';
-import { getProjectById, settingsStore, projectPaths } from './store';
-import type { GroqModel } from './store';
+import { getProjectById, settingsStore, projectPaths, readProjectFile } from './store';
+import type { GroqModel, TranscriptionProgress } from './store';
 import { transcribeWithGroq } from './groq';
 
 export interface SrtSegment {
@@ -56,6 +56,11 @@ export function registerWhisperHandlers(): void {
   ipcMain.handle('settings:setTranscriptionApiKeys', (_event, keys: string[]) => {
     settingsStore.set('transcriptionApiKeys', keys);
     return { success: true };
+  });
+
+  ipcMain.handle('whisper:getProgress', (_event, projectId: string) => {
+    const paths = projectPaths(projectId);
+    return readProjectFile<TranscriptionProgress>(projectId, paths.progress);
   });
 
   ipcMain.handle('whisper:transcribe', async (event, projectId: string, model: string) => {
