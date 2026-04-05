@@ -46,10 +46,12 @@ interface PlaybackControlsProps {
   duration: number
   isFullscreen: boolean
   volume: number
+  clip: { startMs: number; endMs: number } | null
   onTogglePlayPause: () => void
   onSeek: (time: number) => void
   onToggleFullscreen: () => void
   onVolumeChange: (volume: number) => void
+  onClearClip: () => void
 }
 
 function PlaybackControls({
@@ -58,15 +60,26 @@ function PlaybackControls({
   duration,
   isFullscreen,
   volume,
+  clip,
   onTogglePlayPause,
   onSeek,
   onToggleFullscreen,
   onVolumeChange,
+  onClearClip,
 }: PlaybackControlsProps) {
   const [prevVolume, setPrevVolume] = useState(volume || 1)
 
+  // When clip is active, remap time/duration to clip range
+  const clipStart = clip ? clip.startMs / 1000 : 0
+  const clipEnd = clip ? clip.endMs / 1000 : duration
+  const clipDuration = clipEnd - clipStart
+  const displayTime = clip ? Math.max(0, currentTime - clipStart) : currentTime
+  const displayDuration = clip ? clipDuration : duration
+
   function handleSeekChange(e: React.ChangeEvent<HTMLInputElement>) {
-    onSeek(parseFloat(e.target.value))
+    const val = parseFloat(e.target.value)
+    // Map back to absolute time if clip is active
+    onSeek(clip ? val + clipStart : val)
   }
 
   function handleToggleMute() {
@@ -78,7 +91,7 @@ function PlaybackControls({
     }
   }
 
-  const progress = duration > 0 ? (currentTime / duration) * 100 : 0
+  const progress = displayDuration > 0 ? (displayTime / displayDuration) * 100 : 0
 
   return (
     <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/60 px-1 py-0.5 shadow-xl backdrop-blur-md transition-all duration-300 hover:border-white/20 hover:bg-black/70">
@@ -99,13 +112,13 @@ function PlaybackControls({
       </Button>
 
       <span className="w-[30px] text-right text-[9px] font-medium tabular-nums text-slate-300">
-        {formatTime(currentTime)}
+        {formatTime(displayTime)}
       </span>
 
       <div className="group relative flex h-6 flex-1 items-center">
-        <div className="absolute left-0 right-0 h-0.5 overflow-hidden rounded-full bg-white/10">
+        <div className={`absolute left-0 right-0 h-0.5 overflow-hidden rounded-full ${clip ? "bg-primary/20" : "bg-white/10"}`}>
           <div
-            className="h-full rounded-full bg-[#34B27B]"
+            className={`h-full rounded-full ${clip ? "bg-primary" : "bg-[#34B27B]"}`}
             style={{ width: `${progress}%` }}
           />
         </div>
@@ -113,8 +126,8 @@ function PlaybackControls({
         <input
           type="range"
           min="0"
-          max={duration || 100}
-          value={currentTime}
+          max={displayDuration || 100}
+          value={displayTime}
           onChange={handleSeekChange}
           step="0.01"
           className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
@@ -127,8 +140,17 @@ function PlaybackControls({
       </div>
 
       <span className="w-[30px] text-[9px] font-medium tabular-nums text-slate-500">
-        {formatTime(duration)}
+        {formatTime(displayDuration)}
       </span>
+
+      {clip && (
+        <button
+          onClick={onClearClip}
+          className="shrink-0 rounded-full bg-primary/20 px-2 py-0.5 text-[9px] text-primary hover:bg-primary/30"
+        >
+          ✕ 片段
+        </button>
+      )}
 
       {/* Volume */}
       <div className="group/vol flex items-center">
@@ -295,6 +317,11 @@ export function PlayerPage({ projectId, filePath, fileName, onBack }: PlayerPage
   const [analysisTab, setAnalysisTab] = useState<"sections" | "clips">("sections")
   const [showPanel, setShowPanel] = useState(false)
 
+  // Clip playback: play only a specific time range
+  const [activeClip, setActiveClip] = useState<{ startMs: number; endMs: number } | null>(null)
+  const activeClipRef = useRef(activeClip)
+  activeClipRef.current = activeClip
+
   const hideTimerRef = useRef<ReturnType<typeof setTimeout>>(null)
   const subtitlesRef = useRef<Subtitle[]>([])
   subtitlesRef.current = subtitles
@@ -333,11 +360,22 @@ export function PlayerPage({ projectId, filePath, fileName, onBack }: PlayerPage
     }
   }, [projectId])
 
-  // Subtitle update (driven by onTimeUpdate callback)
+  // Subtitle update + clip boundary check (driven by onTimeUpdate callback)
   const updateSubtitle = useCallback((timeSec: number) => {
     const ms = timeSec * 1000
     const active = subtitlesRef.current.find((s) => ms >= s.startMs && ms <= s.endMs)
     setCurrentText(active?.text ?? "")
+
+    // Auto-pause at clip end
+    const clip = activeClipRef.current
+    if (clip && ms >= clip.endMs) {
+      const video = videoRef.current
+      if (video) {
+        allowPlaybackRef.current = false
+        video.pause()
+        video.currentTime = clip.endMs / 1000
+      }
+    }
   }, [])
 
   // Set up video event handlers (from openscreen videoEventHandlers.ts)
@@ -467,6 +505,19 @@ export function PlayerPage({ projectId, filePath, fileName, onBack }: PlayerPage
     video.currentTime = ms / 1000
   }, [])
 
+  const playClip = useCallback((startMs: number, endMs: number) => {
+    const video = videoRef.current
+    if (!video) return
+    setActiveClip({ startMs, endMs })
+    video.currentTime = startMs / 1000
+    allowPlaybackRef.current = true
+    video.play().catch(() => { allowPlaybackRef.current = false })
+  }, [])
+
+  const clearClip = useCallback(() => {
+    setActiveClip(null)
+  }, [])
+
   const formatMs = (ms: number) => {
     const s = Math.floor(ms / 1000)
     const h = Math.floor(s / 3600)
@@ -559,10 +610,12 @@ export function PlayerPage({ projectId, filePath, fileName, onBack }: PlayerPage
               duration={duration}
               isFullscreen={isFullscreen}
               volume={volume}
+              clip={activeClip}
               onTogglePlayPause={togglePlayPause}
               onSeek={handleSeek}
               onToggleFullscreen={toggleFullscreen}
               onVolumeChange={handleVolumeChange}
+              onClearClip={clearClip}
             />
           </div>
         </div>
@@ -617,21 +670,35 @@ export function PlayerPage({ projectId, filePath, fileName, onBack }: PlayerPage
                 )
               })}
 
-              {analysisTab === "clips" && analysis.clips.map((clip, i) => (
-                <button
-                  key={i}
-                  className="w-full border-b px-3 py-2.5 text-left transition-colors hover:bg-accent"
-                  onClick={() => seekToMs(clip.startMs)}
-                >
-                  <div className="flex items-baseline gap-2">
-                    <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
-                      {formatMs(clip.startMs)} – {formatMs(clip.endMs)}
-                    </span>
-                  </div>
-                  <p className="mt-0.5 text-sm font-medium">{clip.title}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{clip.reason}</p>
-                </button>
-              ))}
+              {analysisTab === "clips" && analysis.clips.map((clip, i) => {
+                const isActive = activeClip?.startMs === clip.startMs && activeClip?.endMs === clip.endMs
+                return (
+                  <button
+                    key={i}
+                    className={`w-full border-b px-3 py-2.5 text-left transition-colors hover:bg-accent ${
+                      isActive ? "bg-accent/50 border-l-2 border-l-primary" : ""
+                    }`}
+                    onClick={() => {
+                      if (isActive) {
+                        clearClip()
+                      } else {
+                        playClip(clip.startMs, clip.endMs)
+                      }
+                    }}
+                  >
+                    <div className="flex items-baseline gap-2">
+                      <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+                        {formatMs(clip.startMs)} – {formatMs(clip.endMs)}
+                      </span>
+                      {isActive && (
+                        <span className="text-[10px] text-primary">播放中 · 點擊取消</span>
+                      )}
+                    </div>
+                    <p className="mt-0.5 text-sm font-medium">{clip.title}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{clip.reason}</p>
+                  </button>
+                )
+              })}
             </div>
           </div>
         )}
