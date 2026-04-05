@@ -356,7 +356,6 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
   const [analysisError, setAnalysisError] = useState<string | null>(null)
   const [analysisModelKey, setAnalysisModelKey] = useState("gemini:gemini-2.5-flash")
   const [panelTab, setPanelTab] = useState<"srt" | "sections" | "clips">("srt")
-  const [showPanel, setShowPanel] = useState(false)
 
   // Clip playback: play only a specific time range
   const [activeClip, setActiveClip] = useState<{ startMs: number; endMs: number } | null>(null)
@@ -374,13 +373,13 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
       if (srt) {
         setSubtitles(parseSrt(srt))
         setHasSrt(true)
-        setShowPanel(true)
+        
       }
     })
     window.electronAPI.getAnalysisData(projectId).then((data) => {
       if (data) {
         setAnalysis(data)
-        setShowPanel(true)
+        
       }
     })
   }, [projectId])
@@ -415,7 +414,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
         const srt = await window.electronAPI.readSrt(projectId)
         if (srt) setSubtitles(parseSrt(srt))
         setHasSrt(true)
-        setShowPanel(true)
+        
         setPanelTab("srt")
       } else {
         setTranscribeError(result.error ?? "Transcription failed")
@@ -435,7 +434,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
       const result = await window.electronAPI.analyzeProject(projectId, provider, model)
       if (result.success && result.data) {
         setAnalysis(result.data)
-        setShowPanel(true)
+        
       } else {
         console.error("[analyzer] failed:", result.error)
         setAnalysisError(result.error ?? "Unknown error")
@@ -662,12 +661,6 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
           <Separator orientation="vertical" className="h-5" />
 
           {/* Step 2: Analysis */}
-          {(hasSrt || analysis) && !analyzing && (
-            <Button variant="ghost" size="sm" onClick={() => setShowPanel(!showPanel)}>
-              <ListVideo className="mr-1 size-4" />
-              面板
-            </Button>
-          )}
           {!analyzing && hasSrt && (
             <div className="flex items-center gap-1">
               <Select value={analysisModelKey} onValueChange={setAnalysisModelKey}>
@@ -760,7 +753,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
         </div>
 
         {/* Side panel */}
-        {showPanel && (hasSrt || analysis) && !isFullscreen && (
+        {!isFullscreen && (
           <div className="flex w-80 shrink-0 flex-col border-l bg-background">
             <div className="flex border-b">
               {hasSrt && (
