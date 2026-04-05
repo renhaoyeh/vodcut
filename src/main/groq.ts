@@ -12,6 +12,8 @@ const ffmpegPath = path.join(process.cwd(), 'node_modules', 'ffmpeg-static', 'ff
 // 12 minutes per chunk ≈ 23MB WAV (under 25MB API limit)
 const CHUNK_SEC = 720;
 
+const BASE_PROMPT = '以下是繁體中文的語音辨識結果。';
+
 function getAudioDuration(audioPath: string): number {
   const stat = fs.statSync(audioPath);
   const pcmBytes = stat.size - 44; // strip WAV header
@@ -47,7 +49,7 @@ interface GroqResponse {
   segments: GroqSegment[];
 }
 
-function uploadToGroq(filePath: string, apiKey: string, model: string): Promise<GroqResponse> {
+function uploadToGroq(filePath: string, apiKey: string, model: string, prompt?: string): Promise<GroqResponse> {
   const boundary = '----FormBoundary' + crypto.randomBytes(16).toString('hex');
   const fileData = fs.readFileSync(filePath);
   const fileName = path.basename(filePath);
@@ -56,8 +58,12 @@ function uploadToGroq(filePath: string, apiKey: string, model: string): Promise<
     ['model', model],
     ['language', 'zh'],
     ['response_format', 'verbose_json'],
-    ['temperature', '0'],
+    ['temperature', '0.2'],
   ];
+
+  if (prompt) {
+    fields.push(['prompt', prompt]);
+  }
 
   const parts: Buffer[] = [];
   for (const [key, val] of fields) {
@@ -144,8 +150,19 @@ export async function transcribeWithGroq(
       // Extract chunk WAV
       await extractChunk(audioPath, startSec, duration, chunkPath);
 
+      // Build prompt: base + tail of previous transcription for context continuity
+      let prompt = BASE_PROMPT;
+      if (allSegments.length > 0) {
+        let tail = '';
+        for (let i = allSegments.length - 1; i >= 0 && tail.length < 100; i--) {
+          tail = allSegments[i].text + tail;
+        }
+        if (tail.length > 100) tail = tail.slice(-100);
+        prompt = BASE_PROMPT + ' ' + tail;
+      }
+
       // Upload to Groq
-      const result = await uploadToGroq(chunkPath, apiKey, model);
+      const result = await uploadToGroq(chunkPath, apiKey, model, prompt);
 
       // Clean up temp file
       try { fs.unlinkSync(chunkPath); } catch {}
