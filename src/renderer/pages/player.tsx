@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from "react"
+import { useVirtualizer } from "@tanstack/react-virtual"
 import { useTranslation } from "react-i18next"
 import { ArrowLeft, Maximize, Minimize, Pause, Play, Loader2, Sparkles, ListVideo, Scissors, Volume2, VolumeX, Mic, FileText, ArrowDown } from "lucide-react"
 import { Button } from "@/renderer/components/ui/button"
@@ -379,7 +380,8 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
   const subtitlesRef = useRef<Subtitle[]>([])
   const [srtAutoScroll, setSrtAutoScroll] = useState(true)
   const srtAutoScrollRef = useRef(true)
-  const activeSrtRef = useRef<HTMLDivElement>(null)
+  const prevActiveSrtIdx = useRef<number>(-1)
+  const srtScrollRef = useRef<HTMLDivElement>(null)
   subtitlesRef.current = subtitles
   const handlersRef = useRef<ReturnType<typeof createVideoEventHandlers> | null>(null)
 
@@ -675,6 +677,21 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
   }
 
   const currentMs = currentTime * 1000
+  const activeSrtIdx = subtitles.findIndex((s) => currentMs >= s.startMs && currentMs < s.endMs)
+
+  const srtVirtualizer = useVirtualizer({
+    count: subtitles.length,
+    getScrollElement: () => srtScrollRef.current,
+    estimateSize: () => 52,
+    overscan: 10,
+  })
+
+  useEffect(() => {
+    if (!srtAutoScrollRef.current) return
+    if (activeSrtIdx === -1 || activeSrtIdx === prevActiveSrtIdx.current) return
+    prevActiveSrtIdx.current = activeSrtIdx
+    srtVirtualizer.scrollToIndex(activeSrtIdx, { align: "center", behavior: "smooth" })
+  }, [activeSrtIdx, srtVirtualizer])
 
   return (
     <div className="flex h-full flex-1 flex-col overflow-hidden bg-background">
@@ -837,30 +854,39 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
 
             {panelTab === "srt" && (
               <div className="relative flex-1 overflow-hidden">
-                <ScrollArea className="h-full" onWheel={() => { if (srtAutoScrollRef.current) { srtAutoScrollRef.current = false; setSrtAutoScroll(false) } }}>
-                  {subtitles.map((sub, i) => {
-                    const active = currentMs >= sub.startMs && currentMs < sub.endMs
-                    return (
-                      <div
-                        key={i}
-                        ref={active ? (el) => { activeSrtRef.current = el; if (srtAutoScrollRef.current) el?.scrollIntoView({ block: "nearest", behavior: "smooth" }) } : undefined}
-                        className={`border-b px-3 py-2 transition-colors hover:bg-accent cursor-pointer ${
-                          active ? "bg-accent/50 border-l-2 border-l-primary" : ""
-                        }`}
-                        onClick={() => { setActiveClip(null); seekToMs(sub.startMs) }}
-                      >
-                        <span className="text-[10px] tabular-nums text-muted-foreground">
-                          {formatMs(sub.startMs)} – {formatMs(sub.endMs)}
-                        </span>
-                        <p className="mt-0.5 text-sm">{sub.text}</p>
-                      </div>
-                    )
-                  })}
-                </ScrollArea>
+                <div
+                  ref={srtScrollRef}
+                  className="h-full overflow-y-auto"
+                  onWheel={() => { if (srtAutoScrollRef.current) { srtAutoScrollRef.current = false; setSrtAutoScroll(false) } }}
+                >
+                  <div style={{ height: srtVirtualizer.getTotalSize(), position: "relative" }}>
+                    {srtVirtualizer.getVirtualItems().map((vItem) => {
+                      const sub = subtitles[vItem.index]
+                      const active = vItem.index === activeSrtIdx
+                      return (
+                        <div
+                          key={vItem.index}
+                          style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${vItem.start}px)` }}
+                          ref={srtVirtualizer.measureElement}
+                          data-index={vItem.index}
+                          className={`border-b px-3 py-2 transition-colors hover:bg-accent cursor-pointer ${
+                            active ? "bg-accent/50 border-l-2 border-l-primary" : ""
+                          }`}
+                          onClick={() => { setActiveClip(null); seekToMs(sub.startMs) }}
+                        >
+                          <span className="text-[10px] tabular-nums text-muted-foreground">
+                            {formatMs(sub.startMs)} – {formatMs(sub.endMs)}
+                          </span>
+                          <p className="mt-0.5 text-sm">{sub.text}</p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
                 {!srtAutoScroll && (
                   <button
                     className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground shadow-lg transition-opacity hover:opacity-90"
-                    onClick={() => { srtAutoScrollRef.current = true; setSrtAutoScroll(true); activeSrtRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }) }}
+                    onClick={() => { srtAutoScrollRef.current = true; setSrtAutoScroll(true); if (activeSrtIdx !== -1) srtVirtualizer.scrollToIndex(activeSrtIdx, { align: "center", behavior: "smooth" }) }}
                   >
                     <ArrowDown className="size-3.5" />
                     {t("player.scrollToActive")}
