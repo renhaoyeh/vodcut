@@ -378,6 +378,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
   const hideTimerRef = useRef<ReturnType<typeof setTimeout>>(null)
   const subtitlesRef = useRef<Subtitle[]>([])
   const [srtAutoScroll, setSrtAutoScroll] = useState(true)
+  const srtAutoScrollRef = useRef(true)
   const activeSrtRef = useRef<HTMLDivElement>(null)
   subtitlesRef.current = subtitles
   const handlersRef = useRef<ReturnType<typeof createVideoEventHandlers> | null>(null)
@@ -836,13 +837,13 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
 
             {panelTab === "srt" && (
               <div className="relative flex-1 overflow-hidden">
-                <ScrollArea className="h-full" onWheel={() => { if (srtAutoScroll) setSrtAutoScroll(false) }}>
+                <ScrollArea className="h-full" onWheel={() => { if (srtAutoScrollRef.current) { srtAutoScrollRef.current = false; setSrtAutoScroll(false) } }}>
                   {subtitles.map((sub, i) => {
                     const active = currentMs >= sub.startMs && currentMs < sub.endMs
                     return (
                       <div
                         key={i}
-                        ref={active ? (el) => { activeSrtRef.current = el; if (srtAutoScroll) el?.scrollIntoView({ block: "nearest", behavior: "smooth" }) } : undefined}
+                        ref={active ? (el) => { activeSrtRef.current = el; if (srtAutoScrollRef.current) el?.scrollIntoView({ block: "nearest", behavior: "smooth" }) } : undefined}
                         className={`border-b px-3 py-2 transition-colors hover:bg-accent cursor-pointer ${
                           active ? "bg-accent/50 border-l-2 border-l-primary" : ""
                         }`}
@@ -859,7 +860,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                 {!srtAutoScroll && (
                   <button
                     className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground shadow-lg transition-opacity hover:opacity-90"
-                    onClick={() => { setSrtAutoScroll(true); activeSrtRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }) }}
+                    onClick={() => { srtAutoScrollRef.current = true; setSrtAutoScroll(true); activeSrtRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }) }}
                   >
                     <ArrowDown className="size-3.5" />
                     {t("player.scrollToActive")}
