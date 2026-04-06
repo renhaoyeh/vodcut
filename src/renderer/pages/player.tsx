@@ -367,6 +367,8 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
   const [analysis, setAnalysis] = useState<AnalysisData | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
   const [analysisModelKey, setAnalysisModelKey] = useState("groq:meta-llama/llama-4-scout-17b-16e-instruct")
+  const [savedModels, setSavedModels] = useState<string[]>([])
+  const [activeAnalysisModel, setActiveAnalysisModel] = useState<string | null>(null)
   const [panelTab, setPanelTab] = useState<"srt" | "analysis">("srt")
 
   // API key availability
@@ -405,10 +407,20 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
         
       }
     })
-    window.electronAPI.getAnalysisData(projectId).then((data) => {
-      if (data) {
-        setAnalysis(data)
-        
+    window.electronAPI.listAnalysisModels(projectId).then((models) => {
+      setSavedModels(models)
+      if (models.length > 0) {
+        // Load the first saved model's analysis
+        const firstModel = models[0]
+        setActiveAnalysisModel(firstModel)
+        window.electronAPI.getAnalysisDataForModel(projectId, firstModel).then((data) => {
+          if (data) setAnalysis(data)
+        })
+      } else {
+        // Fallback to legacy analysis.json
+        window.electronAPI.getAnalysisData(projectId).then((data) => {
+          if (data) setAnalysis(data)
+        })
       }
     })
   }, [projectId])
@@ -463,13 +475,15 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
 
   const handleAnalyze = useCallback(async () => {
     setAnalyzing(true)
-    // error shown via toast
     try {
       const [provider, model] = analysisModelKey.split(":", 2)
       const result = await window.electronAPI.analyzeProject(projectId, provider, model)
       if (result.success && result.data) {
         setAnalysis(result.data)
-        
+        setActiveAnalysisModel(model)
+        // Refresh saved models list
+        const models = await window.electronAPI.listAnalysisModels(projectId)
+        setSavedModels(models)
       } else {
         console.error("[analyzer] failed:", result.error)
         toast.error(result.error ?? "Unknown error")
@@ -808,7 +822,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                   {t("player.tabSubtitles", { count: subtitles.length })}
                 </button>
               )}
-              {analysis && (
+              {(analysis || savedModels.length > 0) && (
                 <button
                   className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
                     panelTab === "analysis"
@@ -847,6 +861,34 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
             )}
 
             {panelTab === "analysis" && analysis && (
+              <div className="flex h-full flex-col">
+              {savedModels.length > 1 && (
+                <div className="flex items-center gap-1 border-b px-3 py-1.5">
+                  {savedModels.map((m) => {
+                    const label = ANALYSIS_MODELS.find((am) => am.value === `groq:${m}`)?.label ?? m.split("/").pop()
+                    const isActive = activeAnalysisModel === m
+                    return (
+                      <button
+                        key={m}
+                        className={`rounded-md px-2 py-0.5 text-[11px] transition-colors ${
+                          isActive
+                            ? "bg-primary text-primary-foreground"
+                            : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                        }`}
+                        onClick={async () => {
+                          const data = await window.electronAPI.getAnalysisDataForModel(projectId, m)
+                          if (data) {
+                            setAnalysis(data)
+                            setActiveAnalysisModel(m)
+                          }
+                        }}
+                      >
+                        {label}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
               <ResizablePanelGroup orientation="vertical" className="flex-1">
                 <ResizablePanel defaultSize={50} minSize={20}>
                   <div className="flex h-full flex-col">
@@ -919,6 +961,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                   </div>
                 </ResizablePanel>
               </ResizablePanelGroup>
+              </div>
             )}
           </div>
         </ResizablePanel>

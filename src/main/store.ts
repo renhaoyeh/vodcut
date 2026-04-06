@@ -146,8 +146,14 @@ export function projectPaths(projectId: string) {
     audio: path.join(dir, 'audio.wav'),
     srt: path.join(dir, 'subtitles.srt'),
     analysis: path.join(dir, 'analysis.json'),
+    analysisDir: path.join(dir, 'analysis'),
     progress: path.join(dir, 'transcription-progress.json'),
   };
+}
+
+/** Sanitize model name for use as a filename. */
+export function modelToFilename(model: string): string {
+  return model.replace(/[/\\:*?"<>|]/g, '_');
 }
 
 // --- Helpers ---

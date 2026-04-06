@@ -1,7 +1,7 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import fs from 'fs';
 import path from 'path';
-import { getProjectById, settingsStore, projectPaths, writeProjectFile, readProjectFile, saveGroqRateLimits, saveGroqError, clearGroqError } from './store';
+import { getProjectById, settingsStore, projectPaths, writeProjectFile, readProjectFile, saveGroqRateLimits, saveGroqError, clearGroqError, modelToFilename } from './store';
 import { getGroqClient, extractRateLimitHeaders } from './groq-client';
 
 const SYSTEM_PROMPT = `你是一位專業的影片剪輯顧問。使用者會給你一段影片的逐字稿（SRT 格式，含時間戳記），
@@ -180,16 +180,19 @@ export function registerAnalyzerHandlers(): void {
 
       const analysisData: AnalysisData = { sections: allSections, clips: allClips };
 
-      // Save analysis to project folder
-      writeProjectFile(paths.analysis, analysisData);
+      // Save analysis per model
+      if (!fs.existsSync(paths.analysisDir)) fs.mkdirSync(paths.analysisDir, { recursive: true });
+      const modelFile = path.join(paths.analysisDir, `${modelToFilename(model)}.json`);
+      writeProjectFile(modelFile, analysisData);
 
-      // Also save a copy next to the video
+      // Also keep legacy analysis.json (latest result) + copy next to video
+      writeProjectFile(paths.analysis, analysisData);
       const videoDir = path.dirname(project.filePath);
       const videoName = path.basename(project.filePath, path.extname(project.filePath));
       try { fs.writeFileSync(path.join(videoDir, `${videoName}.analysis.json`), JSON.stringify(analysisData, null, 2), 'utf8'); } catch {}
 
       win?.webContents.send('analyzer:status', projectId, 'done');
-      return { success: true, data: analysisData };
+      return { success: true, data: analysisData, model };
     } catch (err) {
       win?.webContents.send('analyzer:status', projectId, 'error');
       return { success: false, error: (err as Error).message };
@@ -199,5 +202,25 @@ export function registerAnalyzerHandlers(): void {
   ipcMain.handle('analyzer:getData', (_event, projectId: string) => {
     const paths = projectPaths(projectId);
     return readProjectFile<AnalysisData>(projectId, paths.analysis);
+  });
+
+  /** List all saved analysis models for a project. */
+  ipcMain.handle('analyzer:listModels', (_event, projectId: string) => {
+    const paths = projectPaths(projectId);
+    if (!fs.existsSync(paths.analysisDir)) return [];
+    return fs.readdirSync(paths.analysisDir)
+      .filter((f) => f.endsWith('.json'))
+      .map((f) => f.replace(/\.json$/, '').replace(/_/g, '/'));
+  });
+
+  /** Load analysis for a specific model. */
+  ipcMain.handle('analyzer:getDataForModel', (_event, projectId: string, model: string) => {
+    const paths = projectPaths(projectId);
+    const modelFile = path.join(paths.analysisDir, `${modelToFilename(model)}.json`);
+    try {
+      return JSON.parse(fs.readFileSync(modelFile, 'utf8')) as AnalysisData;
+    } catch {
+      return null;
+    }
   });
 }

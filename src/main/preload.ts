@@ -23,6 +23,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Analyzer
   analyzeProject: (projectId: string, provider: string, model: string) => ipcRenderer.invoke('analyzer:analyze', projectId, provider, model),
   getAnalysisData: (projectId: string) => ipcRenderer.invoke('analyzer:getData', projectId),
+  listAnalysisModels: (projectId: string) => ipcRenderer.invoke('analyzer:listModels', projectId),
+  getAnalysisDataForModel: (projectId: string, model: string) => ipcRenderer.invoke('analyzer:getDataForModel', projectId, model),
   onAnalyzerStatus: (callback: (projectId: string, status: string) => void) => {
     const listener = (_event: any, projectId: string, status: string) => callback(projectId, status);
     ipcRenderer.on('analyzer:status', listener);
