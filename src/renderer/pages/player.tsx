@@ -5,6 +5,7 @@ import { Button } from "@/renderer/components/ui/button"
 import { Separator } from "@/renderer/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/renderer/components/ui/select"
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/renderer/components/ui/resizable"
+import { ScrollArea } from "@/renderer/components/ui/scroll-area"
 import type { AnalysisData } from "@/main/store"
 import { toast } from "sonner"
 
@@ -838,7 +839,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
             </div>
 
             {panelTab === "srt" && (
-              <div className="flex-1 overflow-y-auto">
+              <ScrollArea className="flex-1">
                 {subtitles.map((sub, i) => {
                   const active = currentMs >= sub.startMs && currentMs < sub.endMs
                   return (
@@ -857,7 +858,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                     </div>
                   )
                 })}
-              </div>
+              </ScrollArea>
             )}
 
             {panelTab === "analysis" && analysis && (
@@ -896,7 +897,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                       <ListVideo className="size-3.5 text-muted-foreground" />
                       <span className="text-xs font-medium text-muted-foreground">{t("player.tabSections", { count: analysis.sections.length })}</span>
                     </div>
-                    <div className="flex-1 overflow-y-auto">
+                    <ScrollArea className="flex-1">
                       {analysis.sections.map((sec, i) => {
                         const active = currentMs >= sec.startMs && currentMs < sec.endMs
                         return (
@@ -917,7 +918,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                           </button>
                         )
                       })}
-                    </div>
+                    </ScrollArea>
                   </div>
                 </ResizablePanel>
                 <ResizableHandle withHandle orientation="vertical" />
@@ -927,7 +928,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                       <Scissors className="size-3.5 text-muted-foreground" />
                       <span className="text-xs font-medium text-muted-foreground">{t("player.tabClips", { count: analysis.clips.length })}</span>
                     </div>
-                    <div className="flex-1 overflow-y-auto">
+                    <ScrollArea className="flex-1">
                       {analysis.clips.map((clip, i) => {
                         const isActive = activeClip?.startMs === clip.startMs && activeClip?.endMs === clip.endMs
                         return (
@@ -957,7 +958,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                           </button>
                         )
                       })}
-                    </div>
+                    </ScrollArea>
                   </div>
                 </ResizablePanel>
               </ResizablePanelGroup>
