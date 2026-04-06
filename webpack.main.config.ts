@@ -7,6 +7,7 @@ export const mainConfig: Configuration = {
   externals: {
     'ffmpeg-static': 'commonjs2 ffmpeg-static',
     'groq-sdk': 'commonjs2 groq-sdk',
+    'opencc-js': 'commonjs2 opencc-js',
   },
   /**
    * This is the main entry point for your application, it's the first file

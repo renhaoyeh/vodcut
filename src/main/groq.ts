@@ -5,6 +5,9 @@ import { spawn } from 'child_process';
 import { getProjectById, updateProject, projectPaths, readProjectFile, writeProjectFile, saveGroqRateLimits, saveGroqError, clearGroqError, type TranscriptionProgress } from './store';
 import { type SrtSegment, segmentsToSrt } from './whisper';
 import { getGroqClient, extractRateLimitHeaders } from './groq-client';
+import * as OpenCC from 'opencc-js';
+
+const s2tw: (text: string) => string = OpenCC.Converter({ from: 'cn', to: 'twp' });
 
 const ffmpegPath = path.join(process.cwd(), 'node_modules', 'ffmpeg-static', 'ffmpeg.exe');
 
@@ -124,7 +127,7 @@ export async function transcribeWithGroq(
           index: segIdx++,
           startMs: Math.round(seg.start * 1000) + offsetMs,
           endMs: Math.round(seg.end * 1000) + offsetMs,
-          text: seg.text.trim(),
+          text: s2tw(seg.text.trim()),
         });
       }
       c++;
