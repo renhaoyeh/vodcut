@@ -32,6 +32,7 @@
     "transcribeNoKey": "請先在設定中填入 Groq Whisper API Key",
     "convertingAudio": "轉換音訊中...",
     "recognizing": "辨識中...",
+    "detectingSilence": "偵測靜音段落中...",
     "resumeRecognizing": "繼續辨識 (已完成 {{current}}/{{total}})...",
     "recognizingProgress": "辨識中 ({{current}}/{{total}})...",
     "analyze": "分析大綱",

@@ -32,6 +32,7 @@
     "transcribeNoKey": "Please set Groq Whisper API Key in Settings first",
     "convertingAudio": "Converting audio...",
     "recognizing": "Recognizing...",
+    "detectingSilence": "Detecting silence gaps...",
     "resumeRecognizing": "Resuming recognition ({{current}}/{{total}} done)...",
     "recognizingProgress": "Recognizing ({{current}}/{{total}})...",
     "analyze": "Analyze outline",

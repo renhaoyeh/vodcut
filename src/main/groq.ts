@@ -11,14 +11,139 @@ const s2tw: (text: string) => string = OpenCC.Converter({ from: 'cn', to: 'twp' 
 
 const ffmpegPath = path.join(process.cwd(), 'node_modules', 'ffmpeg-static', 'ffmpeg.exe');
 
-// 12 minutes per chunk ≈ 23MB WAV (under 25MB API limit)
-const CHUNK_SEC = 720;
+// Max chunk duration in seconds (~5 min, well under 25MB WAV limit)
+const MAX_CHUNK_SEC = 300;
+// Silence detection parameters
+const SILENCE_THRESH_DB = -35;
+const SILENCE_MIN_DURATION = 0.5; // seconds
+
+interface SilenceGap {
+  startSec: number;
+  endSec: number;
+}
 
 function getAudioDuration(audioPath: string): number {
   const stat = fs.statSync(audioPath);
   const pcmBytes = stat.size - 44; // strip WAV header
   const bytesPerSec = 16000 * 2;  // 16kHz, 16-bit mono
   return pcmBytes / bytesPerSec;
+}
+
+/**
+ * Use FFmpeg silencedetect to find silence gaps in the audio.
+ * Returns an array of { startSec, endSec } for each detected silence period.
+ */
+function detectSilences(audioPath: string): Promise<SilenceGap[]> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(ffmpegPath, [
+      '-i', audioPath,
+      // Bandpass 300-3000Hz isolates human speech, so silence detection
+      // works even when background music is playing continuously.
+      '-af', `highpass=f=300,lowpass=f=3000,silencedetect=noise=${SILENCE_THRESH_DB}dB:d=${SILENCE_MIN_DURATION}`,
+      '-f', 'null', '-',
+    ], { windowsHide: true });
+
+    let stderr = '';
+    proc.stderr.on('data', (data: Buffer) => { stderr += data.toString(); });
+
+    proc.on('close', (code) => {
+      if (code !== 0) {
+        reject(new Error(`silencedetect exited with code ${code}`));
+        return;
+      }
+
+      const gaps: SilenceGap[] = [];
+      // Parse: [silencedetect @ ...] silence_start: 1.234
+      // Parse: [silencedetect @ ...] silence_end: 2.567 | silence_duration: 1.333
+      const startRegex = /silence_start:\s*([\d.]+)/g;
+      const endRegex = /silence_end:\s*([\d.]+)/g;
+
+      const starts: number[] = [];
+      const ends: number[] = [];
+      let m: RegExpExecArray | null;
+      while ((m = startRegex.exec(stderr))) starts.push(parseFloat(m[1]));
+      while ((m = endRegex.exec(stderr))) ends.push(parseFloat(m[1]));
+
+      for (let i = 0; i < Math.min(starts.length, ends.length); i++) {
+        gaps.push({ startSec: starts[i], endSec: ends[i] });
+      }
+
+      resolve(gaps);
+    });
+    proc.on('error', reject);
+  });
+}
+
+interface ChunkRange {
+  startSec: number;
+  endSec: number;
+}
+
+/**
+ * Derive speech regions from silence gaps, then group them into chunks.
+ * Only regions that contain speech are returned — pure silence/music is skipped.
+ * Each chunk is at most MAX_CHUNK_SEC.
+ */
+function buildChunkRanges(totalSec: number, silences: SilenceGap[]): ChunkRange[] {
+  if (silences.length === 0) {
+    // No silence detected — whole audio has speech, use fixed-size chunks
+    const ranges: ChunkRange[] = [];
+    for (let s = 0; s < totalSec; s += MAX_CHUNK_SEC) {
+      ranges.push({ startSec: s, endSec: Math.min(s + MAX_CHUNK_SEC, totalSec) });
+    }
+    return ranges;
+  }
+
+  // Extract speech regions = gaps between silences
+  const speechRegions: ChunkRange[] = [];
+
+  // Before first silence
+  if (silences[0].startSec > 0.5) {
+    speechRegions.push({ startSec: 0, endSec: silences[0].startSec });
+  }
+  // Between consecutive silences
+  for (let i = 0; i < silences.length - 1; i++) {
+    const gapStart = silences[i].endSec;
+    const gapEnd = silences[i + 1].startSec;
+    if (gapEnd - gapStart > 0.1) {
+      speechRegions.push({ startSec: gapStart, endSec: gapEnd });
+    }
+  }
+  // After last silence
+  const lastEnd = silences[silences.length - 1].endSec;
+  if (totalSec - lastEnd > 0.5) {
+    speechRegions.push({ startSec: lastEnd, endSec: totalSec });
+  }
+
+  if (speechRegions.length === 0) {
+    // Entire audio is silence — nothing to transcribe
+    return [];
+  }
+
+  // Merge nearby speech regions into chunks up to MAX_CHUNK_SEC.
+  // Keep a small padding around each region for context.
+  const PAD = 0.3; // seconds of padding
+  const chunks: ChunkRange[] = [];
+  let chunkStart = Math.max(0, speechRegions[0].startSec - PAD);
+  let chunkEnd = Math.min(totalSec, speechRegions[0].endSec + PAD);
+
+  for (let i = 1; i < speechRegions.length; i++) {
+    const regionStart = Math.max(0, speechRegions[i].startSec - PAD);
+    const regionEnd = Math.min(totalSec, speechRegions[i].endSec + PAD);
+
+    if (regionEnd - chunkStart <= MAX_CHUNK_SEC) {
+      // Fits in the current chunk — extend it
+      chunkEnd = regionEnd;
+    } else {
+      // Doesn't fit — flush current chunk, start a new one
+      chunks.push({ startSec: chunkStart, endSec: chunkEnd });
+      chunkStart = regionStart;
+      chunkEnd = regionEnd;
+    }
+  }
+  chunks.push({ startSec: chunkStart, endSec: chunkEnd });
+
+  return chunks;
 }
 
 function extractChunk(audioPath: string, startSec: number, durationSec: number, outPath: string): Promise<void> {
@@ -86,7 +211,13 @@ export async function transcribeWithGroq(
 
   try {
     const totalSec = getAudioDuration(audioPath);
-    const numChunks = Math.ceil(totalSec / CHUNK_SEC);
+
+    // Detect silence gaps for smart chunking
+    win?.webContents.send('whisper:stage', projectId, JSON.stringify({ key: 'player.detectingSilence' }));
+    const silences = await detectSilences(audioPath);
+    const chunkRanges = buildChunkRanges(totalSec, silences);
+    const numChunks = chunkRanges.length;
+    console.log(`[whisper] detected ${silences.length} silence gaps -> ${numChunks} chunks`);
 
     // Resume from saved progress
     const saved = readProjectFile<TranscriptionProgress>(projectId, paths.progress);
@@ -102,8 +233,9 @@ export async function transcribeWithGroq(
     const tmpDir = app.getPath('temp');
 
     while (c < numChunks) {
-      const startSec = c * CHUNK_SEC;
-      const duration = Math.min(CHUNK_SEC, totalSec - startSec);
+      const range = chunkRanges[c];
+      const startSec = range.startSec;
+      const duration = range.endSec - range.startSec;
       const chunkPath = path.join(tmpDir, `vodcut-groq-chunk-${projectId}-${c}.wav`);
 
       win?.webContents.send('whisper:stage', projectId, JSON.stringify({ key: 'player.recognizingProgress', current: c + 1, total: numChunks }));
@@ -115,7 +247,7 @@ export async function transcribeWithGroq(
       // Upload to Groq — rotate API keys across chunks
       const keyIndex = c % apiKeys.length;
       const apiKey = apiKeys[keyIndex];
-      console.log(`[whisper] chunk ${c + 1}/${numChunks} using key #${keyIndex + 1}`);
+      console.log(`[whisper] chunk ${c + 1}/${numChunks} [${startSec.toFixed(1)}s-${range.endSec.toFixed(1)}s] using key #${keyIndex + 1}`);
       const result = await uploadToGroq(chunkPath, apiKey, model);
 
       // Clean up temp file
