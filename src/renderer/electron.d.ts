@@ -16,6 +16,7 @@ interface ElectronAPI {
 
   // Analyzer
   analyzeProject: (projectId: string, provider: string, model: string) => Promise<{ success: boolean; data?: AnalysisData; model?: string; error?: string }>;
+  getAnalysisProgress: (projectId: string) => Promise<{ model: string; currentChunk: number; numChunks: number } | null>;
   getAnalysisData: (projectId: string) => Promise<AnalysisData | null>;
   listAnalysisModels: (projectId: string) => Promise<string[]>;
   getAnalysisDataForModel: (projectId: string, model: string) => Promise<AnalysisData | null>;

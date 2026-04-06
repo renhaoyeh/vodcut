@@ -368,6 +368,8 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
   const [analysis, setAnalysis] = useState<AnalysisData | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
   const [analysisModelKey, setAnalysisModelKey] = useState("groq:meta-llama/llama-4-scout-17b-16e-instruct")
+  const [analysisStage, setAnalysisStage] = useState("")
+  const [savedAnalysisProgress, setSavedAnalysisProgress] = useState<{ model: string; current: number; total: number } | null>(null)
   const [savedModels, setSavedModels] = useState<string[]>([])
   const [activeAnalysisModel, setActiveAnalysisModel] = useState<string | null>(null)
   const [panelTab, setPanelTab] = useState<"srt" | "analysis">("srt")
@@ -426,6 +428,28 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
     })
   }, [projectId])
 
+  // Check for saved analysis progress (for resume)
+  useEffect(() => {
+    window.electronAPI.getAnalysisProgress(projectId).then((p) => {
+      if (p && p.currentChunk < p.numChunks) {
+        setSavedAnalysisProgress({ model: p.model, current: p.currentChunk, total: p.numChunks })
+      }
+    })
+  }, [projectId])
+
+  // Analysis status listener
+  useEffect(() => {
+    const cleanup = window.electronAPI.onAnalyzerStatus((pid, status) => {
+      if (pid !== projectId) return
+      try {
+        const data = JSON.parse(status)
+        if (data.key) { setAnalysisStage(t(data.key, data) as string); return }
+      } catch { /* plain string */ }
+      setAnalysisStage(status === "analyzing" ? t("player.analyzing") : status)
+    })
+    return cleanup
+  }, [projectId, t])
+
   // Transcription progress listeners
   useEffect(() => {
     const c1 = window.electronAPI.onWhisperProgress((pid, pct) => {
@@ -476,6 +500,8 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
 
   const handleAnalyze = useCallback(async () => {
     setAnalyzing(true)
+    setSavedAnalysisProgress(null)
+    setAnalysisStage(t("player.analyzing"))
     try {
       const [provider, model] = analysisModelKey.split(":", 2)
       const result = await window.electronAPI.analyzeProject(projectId, provider, model)
@@ -731,14 +757,19 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                   title={!hasSrt ? t("player.analyzeNoSrt") : undefined}
                 >
                   <Sparkles className="mr-1 size-4" />
-                  {analysis ? t("player.reanalyze") : t("player.analyze")}
+                  {savedAnalysisProgress
+                    ? t("player.resumeAnalyze", { current: savedAnalysisProgress.current, total: savedAnalysisProgress.total })
+                    : analysis ? t("player.reanalyze") : t("player.analyze")}
                 </Button>
               </>
             ) : (
-              <Button variant="outline" size="sm" disabled>
-                <Loader2 className="mr-1 size-4 animate-spin" />
-                {t("player.analyzing")}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" disabled>
+                  <Loader2 className="mr-1 size-4 animate-spin" />
+                  {t("player.analyzing")}
+                </Button>
+                <span className="text-xs text-muted-foreground">{analysisStage}</span>
+              </div>
             )}
           </div>
         </div>

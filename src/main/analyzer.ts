@@ -162,10 +162,27 @@ export function registerAnalyzerHandlers(): void {
 
       console.log(`[analyzer] model=${model} tpm=${tpm} maxBlocks=${maxBlocks} chunks=${chunks.length} srtLength=${srtContent.length} maxMs=${maxMs}`);
 
-      const allSections: AnalysisSection[] = [];
-      const allClips: AnalysisClip[] = [];
+      // Resume from saved progress
+      interface AnalysisProgress {
+        model: string;
+        currentChunk: number;
+        numChunks: number;
+        sections: AnalysisSection[];
+        clips: AnalysisClip[];
+      }
+      const saved = readProjectFile<AnalysisProgress>(projectId, paths.analysisProgress);
+      const canResume = saved && saved.model === model && saved.numChunks === chunks.length && saved.currentChunk < chunks.length;
 
-      for (let i = 0; i < chunks.length; i++) {
+      const allSections: AnalysisSection[] = canResume ? saved.sections : [];
+      const allClips: AnalysisClip[] = canResume ? saved.clips : [];
+      let startChunk = canResume ? saved.currentChunk : 0;
+
+      if (canResume) {
+        console.log(`[analyzer] resuming from chunk ${startChunk + 1}/${chunks.length}`);
+        win?.webContents.send('analyzer:status', projectId, JSON.stringify({ key: 'player.analyzingResume', current: startChunk, total: chunks.length }));
+      }
+
+      for (let i = startChunk; i < chunks.length; i++) {
         const chunkLabel = chunks.length > 1 ? JSON.stringify({ key: 'player.analyzingChunk', current: i + 1, total: chunks.length }) : 'analyzing';
         win?.webContents.send('analyzer:status', projectId, chunkLabel);
 
@@ -179,12 +196,25 @@ export function registerAnalyzerHandlers(): void {
         allSections.push(...partial.sections);
         allClips.push(...partial.clips);
 
+        // Persist progress after each chunk
+        writeProjectFile(paths.analysisProgress, {
+          model, currentChunk: i + 1, numChunks: chunks.length,
+          sections: allSections, clips: allClips,
+        });
+
         // Wait between chunks to respect rate limit
         if (i < chunks.length - 1) {
           console.log(`[analyzer] waiting 60s for rate limit...`);
-          await sleep(60_000);
+          // Send countdown updates every second
+          for (let s = 60; s > 0; s--) {
+            win?.webContents.send('analyzer:status', projectId, JSON.stringify({ key: 'player.analyzingWait', seconds: s, current: i + 1, total: chunks.length }));
+            await sleep(1_000);
+          }
         }
       }
+
+      // Clean up progress file
+      try { fs.unlinkSync(paths.analysisProgress); } catch {}
 
       // Clamp timestamps to SRT duration
       for (const sec of allSections) {
@@ -215,6 +245,11 @@ export function registerAnalyzerHandlers(): void {
       win?.webContents.send('analyzer:status', projectId, 'error');
       return { success: false, error: (err as Error).message };
     }
+  });
+
+  ipcMain.handle('analyzer:getProgress', (_event, projectId: string) => {
+    const paths = projectPaths(projectId);
+    return readProjectFile<{ model: string; currentChunk: number; numChunks: number }>(projectId, paths.analysisProgress);
   });
 
   ipcMain.handle('analyzer:getData', (_event, projectId: string) => {

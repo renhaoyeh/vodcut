@@ -147,6 +147,7 @@ export function projectPaths(projectId: string) {
     srt: path.join(dir, 'subtitles.srt'),
     analysis: path.join(dir, 'analysis.json'),
     analysisDir: path.join(dir, 'analysis'),
+    analysisProgress: path.join(dir, 'analysis-progress.json'),
     progress: path.join(dir, 'transcription-progress.json'),
   };
 }
