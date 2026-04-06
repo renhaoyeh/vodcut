@@ -30,7 +30,6 @@ export type GroqModel = 'whisper-large-v3' | 'whisper-large-v3-turbo';
 interface SettingsSchema {
   transcriptionApiKeys: string[];
   groqApiKey: string;
-  geminiApiKey: string;
 }
 
 export const settingsStore = new Store<SettingsSchema>({
@@ -38,7 +37,6 @@ export const settingsStore = new Store<SettingsSchema>({
   defaults: {
     transcriptionApiKeys: [],
     groqApiKey: '',
-    geminiApiKey: '',
   },
 });
 

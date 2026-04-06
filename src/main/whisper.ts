@@ -39,17 +39,11 @@ export function registerWhisperHandlers(): void {
     return {
       transcriptionApiKeys: settingsStore.get('transcriptionApiKeys', []),
       groqApiKey: settingsStore.get('groqApiKey', ''),
-      geminiApiKey: settingsStore.get('geminiApiKey', ''),
     };
   });
 
   ipcMain.handle('settings:setGroqApiKey', (_event, key: string) => {
     settingsStore.set('groqApiKey', key);
-    return { success: true };
-  });
-
-  ipcMain.handle('settings:setGeminiApiKey', (_event, key: string) => {
-    settingsStore.set('geminiApiKey', key);
     return { success: true };
   });
 

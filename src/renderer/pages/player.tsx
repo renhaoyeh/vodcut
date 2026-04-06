@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next"
 import { ArrowLeft, Maximize, Minimize, Pause, Play, Loader2, Sparkles, ListVideo, Scissors, Volume2, VolumeX, Mic, FileText } from "lucide-react"
 import { Button } from "@/renderer/components/ui/button"
 import { Separator } from "@/renderer/components/ui/separator"
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/renderer/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/renderer/components/ui/select"
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/renderer/components/ui/resizable"
 import type { AnalysisData } from "@/main/store"
 import { toast } from "sonner"
@@ -14,8 +14,6 @@ const TRANSCRIPTION_MODELS = [
 ] as const
 
 const ANALYSIS_MODELS = [
-  { value: "gemini:gemini-2.5-flash", label: "Gemini 2.5 Flash" },
-  { value: "gemini:gemini-2.0-flash", label: "Gemini 2.0 Flash" },
   { value: "groq:meta-llama/llama-4-scout-17b-16e-instruct", label: "Llama 4 Scout 17B" },
   { value: "groq:llama-3.3-70b-versatile", label: "Llama 3.3 70B" },
   { value: "groq:llama-3.1-8b-instant", label: "Llama 3.1 8B" },
@@ -368,13 +366,12 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
   // Analysis state
   const [analysis, setAnalysis] = useState<AnalysisData | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
-  const [analysisModelKey, setAnalysisModelKey] = useState("gemini:gemini-2.5-flash")
+  const [analysisModelKey, setAnalysisModelKey] = useState("groq:meta-llama/llama-4-scout-17b-16e-instruct")
   const [panelTab, setPanelTab] = useState<"srt" | "analysis">("srt")
 
   // API key availability
   const [hasTranscriptionKey, setHasTranscriptionKey] = useState(false)
   const [hasGroqKey, setHasGroqKey] = useState(false)
-  const [hasGeminiKey, setHasGeminiKey] = useState(false)
 
   // Clip playback: play only a specific time range
   const [activeClip, setActiveClip] = useState<{ startMs: number; endMs: number } | null>(null)
@@ -391,7 +388,6 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
     window.electronAPI.getBackendSettings().then((s) => {
       setHasTranscriptionKey(s.transcriptionApiKeys?.length > 0)
       setHasGroqKey(!!s.groqApiKey)
-      setHasGeminiKey(!!s.geminiApiKey)
     })
     window.electronAPI.getTranscriptionProgress(projectId).then((p) => {
       if (p && p.currentChunk < p.numChunks) {
@@ -708,26 +704,15 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectGroup>
-                      <SelectLabel className="text-[10px]">Gemini{!hasGeminiKey ? t("player.noKey") : ""}</SelectLabel>
-                      {ANALYSIS_MODELS.filter((m) => m.value.startsWith("gemini:")).map((m) => (
-                        <SelectItem key={m.value} value={m.value} className="text-xs" disabled={!hasGeminiKey}>
-                          {m.label}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                    <SelectGroup>
-                      <SelectLabel className="text-[10px]">Groq{!hasGroqKey ? t("player.noKey") : ""}</SelectLabel>
-                      {ANALYSIS_MODELS.filter((m) => m.value.startsWith("groq:")).map((m) => (
-                        <SelectItem key={m.value} value={m.value} className="text-xs" disabled={!hasGroqKey}>
-                          {m.label}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
+                    {ANALYSIS_MODELS.map((m) => (
+                      <SelectItem key={m.value} value={m.value} className="text-xs">
+                        {m.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 <Button variant="outline" size="sm" onClick={handleAnalyze}
-                  disabled={!hasSrt || (analysisModelKey.startsWith("gemini:") ? !hasGeminiKey : !hasGroqKey)}
+                  disabled={!hasSrt || !hasGroqKey}
                   title={!hasSrt ? t("player.analyzeNoSrt") : undefined}
                 >
                   <Sparkles className="mr-1 size-4" />

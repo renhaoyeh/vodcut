@@ -53,7 +53,6 @@ export function SettingsDialog() {
   const [open, setOpen] = useState(false)
   const [transcriptionKeys, setTranscriptionKeys] = useState<string[]>([])
   const [groqApiKey, setGroqApiKey] = useState("")
-  const [geminiApiKey, setGeminiApiKey] = useState("")
   const [rateLimits, setRateLimits] = useState<Record<string, RateLimitInfo>>({})
 
   useEffect(() => {
@@ -61,7 +60,6 @@ export function SettingsDialog() {
     window.electronAPI.getBackendSettings().then((s) => {
       setTranscriptionKeys(s.transcriptionApiKeys?.length ? s.transcriptionApiKeys : [""])
       setGroqApiKey(s.groqApiKey)
-      setGeminiApiKey(s.geminiApiKey)
     })
     window.electronAPI.getRateLimits().then(setRateLimits)
   }, [open])
@@ -90,11 +88,10 @@ export function SettingsDialog() {
     await Promise.all([
       window.electronAPI.setTranscriptionApiKeys(cleanedKeys),
       window.electronAPI.setGroqApiKey(groqApiKey),
-      window.electronAPI.setGeminiApiKey(geminiApiKey),
     ])
     toast.success(t("settings.saved"), { duration: 1500 })
     setOpen(false)
-  }, [transcriptionKeys, groqApiKey, geminiApiKey, t])
+  }, [transcriptionKeys, groqApiKey, t])
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -159,19 +156,6 @@ export function SettingsDialog() {
             {groqApiKey && (
               <RateLimitBadge info={rateLimits[groqApiKey.slice(-8)]} t={t} />
             )}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="gemini-api-key" className="text-sm">{t("settings.geminiLabel")}</Label>
-            <Input
-              id="gemini-api-key"
-              type="password"
-              placeholder="AIza..."
-              value={geminiApiKey}
-              onChange={(e) => setGeminiApiKey(e.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">
-              <Trans i18nKey="settings.geminiHelp" components={{ link: <a href="https://aistudio.google.com/apikey" className="underline" target="_blank" rel="noreferrer" /> }} />
-            </p>
           </div>
         </div>
         <DialogFooter>

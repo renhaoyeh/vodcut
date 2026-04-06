@@ -16,8 +16,6 @@
     "transcriptionHelp": "每行一把 key，多把 key 會自動輪替以避免速率限制。至 <link>console.groq.com</link> 取得",
     "groqLabel": "Groq LLM（分析）",
     "groqHelp": "用於 LLM 分析。至 <link>console.groq.com</link> 取得金鑰",
-    "geminiLabel": "Gemini（分析）",
-    "geminiHelp": "用於 LLM 分析。至 <link>aistudio.google.com</link> 取得金鑰",
     "addKey": "新增 Key",
     "cancel": "取消",
     "save": "儲存",

@@ -16,8 +16,6 @@
     "transcriptionHelp": "One key per line. Multiple keys rotate automatically to avoid rate limits. Get yours at <link>console.groq.com</link>",
     "groqLabel": "Groq LLM (Analysis)",
     "groqHelp": "For LLM analysis. Get your key at <link>console.groq.com</link>",
-    "geminiLabel": "Gemini (Analysis)",
-    "geminiHelp": "For LLM analysis. Get your key at <link>aistudio.google.com</link>",
     "addKey": "Add Key",
     "cancel": "Cancel",
     "save": "Save",

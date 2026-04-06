@@ -1,8 +1,7 @@
 import { ipcMain, BrowserWindow } from 'electron';
-import https from 'https';
 import fs from 'fs';
 import path from 'path';
-import { getProjectById, updateProject, settingsStore, projectPaths, writeProjectFile, readProjectFile, saveGroqRateLimits, saveGroqError, clearGroqError } from './store';
+import { getProjectById, settingsStore, projectPaths, writeProjectFile, readProjectFile, saveGroqRateLimits, saveGroqError, clearGroqError } from './store';
 import { getGroqClient, extractRateLimitHeaders } from './groq-client';
 
 const SYSTEM_PROMPT = `你是一位專業的影片剪輯顧問。使用者會給你一段影片的逐字稿（SRT 格式，含時間戳記），
@@ -53,47 +52,6 @@ export interface AnalysisData {
   clips: AnalysisClip[];
 }
 
-// --------------- HTTP helper ---------------
-
-interface HttpResponse {
-  body: string;
-  headers: Record<string, string | string[] | undefined>;
-}
-
-function httpsPost(hostname: string, urlPath: string, headers: Record<string, string>, body: string): Promise<HttpResponse> {
-  return new Promise((resolve, reject) => {
-    const req = https.request({
-      hostname,
-      path: urlPath,
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...headers },
-    }, (res) => {
-      const chunks: Buffer[] = [];
-      res.on('data', (chunk: Buffer) => chunks.push(chunk));
-      res.on('end', () => {
-        const text = Buffer.concat(chunks).toString();
-        if (res.statusCode !== 200) {
-          try {
-            const err = JSON.parse(text);
-            if (err?.error?.message) { reject(new Error(err.error.message)); return; }
-          } catch { /* fall through */ }
-          reject(new Error(`API error (${res.statusCode}): ${text}`));
-          return;
-        }
-        resolve({ body: text, headers: res.headers as Record<string, string | string[] | undefined> });
-      });
-    });
-
-    req.on('error', (err: Error) => reject(new Error(`API request failed: ${err.message}`)));
-    req.setTimeout(300_000, () => {
-      req.destroy();
-      reject(new Error('API request timed out (300s)'));
-    });
-    req.write(body);
-    req.end();
-  });
-}
-
 // --------------- Groq ---------------
 
 async function callGroq(systemPrompt: string, userMessage: string, model: string): Promise<string> {
@@ -124,39 +82,6 @@ async function callGroq(systemPrompt: string, userMessage: string, model: string
     saveGroqError(apiKey, (err as Error).message);
     throw err;
   }
-}
-
-// --------------- Gemini ---------------
-
-function callGemini(systemPrompt: string, userMessage: string, model: string): Promise<string> {
-  const apiKey = settingsStore.get('geminiApiKey', '') as string;
-  if (!apiKey) return Promise.reject(new Error('Gemini API key not set. Please configure it in Settings.'));
-
-  const body = JSON.stringify({
-    model,
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userMessage },
-    ],
-    temperature: 0,
-    response_format: { type: 'json_object' },
-  });
-
-  return httpsPost('generativelanguage.googleapis.com', '/v1beta/openai/chat/completions', {
-    'Authorization': `Bearer ${apiKey}`,
-  }, body).then((res) => {
-    const json = JSON.parse(res.body);
-    const content = json.choices?.[0]?.message?.content;
-    if (!content) throw new Error(`Gemini returned empty response: ${res.body.slice(0, 500)}`);
-    return content;
-  });
-}
-
-// --------------- Dispatcher ---------------
-
-function callLLM(provider: string, model: string, systemPrompt: string, userMessage: string): Promise<string> {
-  if (provider === 'gemini') return callGemini(systemPrompt, userMessage, model);
-  return callGroq(systemPrompt, userMessage, model);
 }
 
 // --------------- Chunking (for Groq free tier) ---------------
@@ -209,7 +134,7 @@ function parseAnalysisResponse(output: string): AnalysisData {
 // --------------- Main handler ---------------
 
 export function registerAnalyzerHandlers(): void {
-  ipcMain.handle('analyzer:analyze', async (event, projectId: string, provider: string, model: string) => {
+  ipcMain.handle('analyzer:analyze', async (event, projectId: string, _provider: string, model: string) => {
     const project = getProjectById(projectId);
     if (!project) return { success: false, error: 'Project not found' };
 
@@ -223,41 +148,31 @@ export function registerAnalyzerHandlers(): void {
 
       const srtContent = fs.readFileSync(paths.srt, 'utf8');
 
-      let analysisData: AnalysisData;
+      const tpm = GROQ_MODEL_TPM[model] ?? 12_000;
+      const maxBlocks = Math.max(50, Math.floor((tpm - RESERVED_TOKENS) / TOKENS_PER_BLOCK));
+      const chunks = splitSrtIntoChunks(srtContent, maxBlocks);
 
-      if (provider === 'gemini') {
-        // Gemini has large context — send everything at once
-        const userMessage = `以下是逐字稿內容：\n\n${srtContent}`;
-        const output = await callLLM(provider, model, SYSTEM_PROMPT, userMessage);
-        analysisData = parseAnalysisResponse(output);
-      } else {
-        // Groq free tier — chunk if needed
-        const tpm = GROQ_MODEL_TPM[model] ?? 12_000;
-        const maxBlocks = Math.max(50, Math.floor((tpm - RESERVED_TOKENS) / TOKENS_PER_BLOCK));
-        const chunks = splitSrtIntoChunks(srtContent, maxBlocks);
+      const allSections: AnalysisSection[] = [];
+      const allClips: AnalysisClip[] = [];
 
-        const allSections: AnalysisSection[] = [];
-        const allClips: AnalysisClip[] = [];
+      for (let i = 0; i < chunks.length; i++) {
+        const chunkLabel = chunks.length > 1 ? JSON.stringify({ key: 'player.analyzingChunk', current: i + 1, total: chunks.length }) : 'analyzing';
+        win?.webContents.send('analyzer:status', projectId, chunkLabel);
 
-        for (let i = 0; i < chunks.length; i++) {
-          const chunkLabel = chunks.length > 1 ? JSON.stringify({ key: 'player.analyzingChunk', current: i + 1, total: chunks.length }) : 'analyzing';
-          win?.webContents.send('analyzer:status', projectId, chunkLabel);
+        const userMessage = `以下是逐字稿內容${chunkLabel}：\n\n${chunks[i]}`;
+        const output = await callGroq(SYSTEM_PROMPT, userMessage, model);
+        const partial = parseAnalysisResponse(output);
 
-          const userMessage = `以下是逐字稿內容${chunkLabel}：\n\n${chunks[i]}`;
-          const output = await callLLM(provider, model, SYSTEM_PROMPT, userMessage);
-          const partial = parseAnalysisResponse(output);
+        allSections.push(...partial.sections);
+        allClips.push(...partial.clips);
 
-          allSections.push(...partial.sections);
-          allClips.push(...partial.clips);
-
-          // Wait between chunks to respect rate limit
-          if (i < chunks.length - 1) {
-            await sleep(60_000);
-          }
+        // Wait between chunks to respect rate limit
+        if (i < chunks.length - 1) {
+          await sleep(60_000);
         }
-
-        analysisData = { sections: allSections, clips: allClips };
       }
+
+      const analysisData: AnalysisData = { sections: allSections, clips: allClips };
 
       // Save analysis to project folder
       writeProjectFile(paths.analysis, analysisData);
