@@ -152,6 +152,8 @@ export function registerAnalyzerHandlers(): void {
       const maxBlocks = Math.max(50, Math.floor((tpm - RESERVED_TOKENS) / TOKENS_PER_BLOCK));
       const chunks = splitSrtIntoChunks(srtContent, maxBlocks);
 
+      console.log(`[analyzer] model=${model} tpm=${tpm} maxBlocks=${maxBlocks} chunks=${chunks.length} srtLength=${srtContent.length}`);
+
       const allSections: AnalysisSection[] = [];
       const allClips: AnalysisClip[] = [];
 
@@ -160,7 +162,10 @@ export function registerAnalyzerHandlers(): void {
         win?.webContents.send('analyzer:status', projectId, chunkLabel);
 
         const userMessage = `以下是逐字稿內容${chunkLabel}：\n\n${chunks[i]}`;
+        console.log(`[analyzer] chunk ${i + 1}/${chunks.length} sending (${userMessage.length} chars)...`);
+        const t0 = Date.now();
         const output = await callGroq(SYSTEM_PROMPT, userMessage, model);
+        console.log(`[analyzer] chunk ${i + 1}/${chunks.length} done in ${((Date.now() - t0) / 1000).toFixed(1)}s (${output.length} chars)`);
         const partial = parseAnalysisResponse(output);
 
         allSections.push(...partial.sections);
@@ -168,6 +173,7 @@ export function registerAnalyzerHandlers(): void {
 
         // Wait between chunks to respect rate limit
         if (i < chunks.length - 1) {
+          console.log(`[analyzer] waiting 60s for rate limit...`);
           await sleep(60_000);
         }
       }
