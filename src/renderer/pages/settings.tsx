@@ -32,18 +32,18 @@ function RateLimitBadge({ info, t }: { info: RateLimitInfo | undefined; t: (key:
           )}
         </div>
       )}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-2">
         <span className="text-muted-foreground">{t("settings.rateLimitRequests", { remaining: info.remainingRequests, limit: info.limitRequests })}</span>
+        <span className="text-muted-foreground/60">{t("settings.rateLimitUpdatedAt", { time: updatedTime })}</span>
       </div>
       <div className="h-1.5 w-full rounded-full bg-muted">
         <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${Math.max(reqPct * 100, 1)}%` }} />
       </div>
-      <div className="flex items-center justify-between text-muted-foreground/60">
-        {info.limitTokens > 0 && (
+      {info.limitTokens > 0 && (
+        <div className="text-muted-foreground/60">
           <span>{t("settings.rateLimitTokens", { remaining: info.remainingTokens.toLocaleString(), limit: info.limitTokens.toLocaleString() })}</span>
-        )}
-        <span className="ml-auto">{t("settings.rateLimitUpdatedAt", { time: updatedTime })}</span>
-      </div>
+        </div>
+      )}
     </div>
   )
 }
