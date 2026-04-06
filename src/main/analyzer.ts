@@ -152,7 +152,15 @@ export function registerAnalyzerHandlers(): void {
       const maxBlocks = Math.max(50, Math.floor((tpm - RESERVED_TOKENS) / TOKENS_PER_BLOCK));
       const chunks = splitSrtIntoChunks(srtContent, maxBlocks);
 
-      console.log(`[analyzer] model=${model} tpm=${tpm} maxBlocks=${maxBlocks} chunks=${chunks.length} srtLength=${srtContent.length}`);
+      // Find the last timestamp in the SRT to clamp analysis results
+      const maxMs = (() => {
+        const matches = [...srtContent.matchAll(/(\d{2}):(\d{2}):(\d{2}),(\d{3})/g)];
+        if (matches.length === 0) return Infinity;
+        const last = matches[matches.length - 1];
+        return (+last[1] * 3600 + +last[2] * 60 + +last[3]) * 1000 + +last[4];
+      })();
+
+      console.log(`[analyzer] model=${model} tpm=${tpm} maxBlocks=${maxBlocks} chunks=${chunks.length} srtLength=${srtContent.length} maxMs=${maxMs}`);
 
       const allSections: AnalysisSection[] = [];
       const allClips: AnalysisClip[] = [];
@@ -161,7 +169,7 @@ export function registerAnalyzerHandlers(): void {
         const chunkLabel = chunks.length > 1 ? JSON.stringify({ key: 'player.analyzingChunk', current: i + 1, total: chunks.length }) : 'analyzing';
         win?.webContents.send('analyzer:status', projectId, chunkLabel);
 
-        const userMessage = `以下是逐字稿內容${chunkLabel}：\n\n${chunks[i]}`;
+        const userMessage = `以下是逐字稿內容${chunkLabel}（注意：這段逐字稿的時間範圍到 ${maxMs} 毫秒為止，所有時間戳不得超過此值）：\n\n${chunks[i]}`;
         console.log(`[analyzer] chunk ${i + 1}/${chunks.length} sending (${userMessage.length} chars)...`);
         const t0 = Date.now();
         const output = await callGroq(SYSTEM_PROMPT, userMessage, model);
@@ -176,6 +184,16 @@ export function registerAnalyzerHandlers(): void {
           console.log(`[analyzer] waiting 60s for rate limit...`);
           await sleep(60_000);
         }
+      }
+
+      // Clamp timestamps to SRT duration
+      for (const sec of allSections) {
+        sec.startMs = Math.min(sec.startMs, maxMs);
+        sec.endMs = Math.min(sec.endMs, maxMs);
+      }
+      for (const clip of allClips) {
+        clip.startMs = Math.min(clip.startMs, maxMs);
+        clip.endMs = Math.min(clip.endMs, maxMs);
       }
 
       const analysisData: AnalysisData = { sections: allSections, clips: allClips };
