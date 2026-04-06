@@ -1,8 +1,10 @@
 import { ipcMain, BrowserWindow } from 'electron';
+import { spawn } from 'child_process';
+import { createInterface } from 'readline';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
-import { getProjectById, settingsStore, projectPaths, writeProjectFile, readProjectFile, saveGroqRateLimits, saveGroqError, clearGroqError, modelToFilename } from './store';
-import { getGroqClient, extractRateLimitHeaders } from './groq-client';
+import { getProjectById, projectPaths, writeProjectFile, readProjectFile, modelToFilename } from './store';
 
 const SYSTEM_PROMPT = `你是一位專業的影片剪輯顧問。使用者會給你一段影片的逐字稿（SRT 格式，含時間戳記），
 請你分析內容並以 **純 JSON** 回傳（不要加 markdown code fence），格式如下：
@@ -52,76 +54,98 @@ export interface AnalysisData {
   clips: AnalysisClip[];
 }
 
-// --------------- Groq ---------------
+// --------------- Claude CLI ---------------
 
-async function callGroq(systemPrompt: string, userMessage: string, model: string): Promise<string> {
-  const apiKey = settingsStore.get('groqApiKey', '') as string;
-  if (!apiKey) throw new Error('Groq API key not set. Please configure it in Settings.');
+async function callClaude(srtPath: string, onProgress?: (chars: number) => void): Promise<string> {
+  const prompt = `${SYSTEM_PROMPT}\n\n逐字稿檔案路徑：${srtPath}\n請讀取這個檔案並進行分析。`;
 
-  const client = getGroqClient(apiKey);
-  try {
-    const { data, response } = await client.chat.completions
-      .create({
-        model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userMessage },
-        ],
-        temperature: 0,
-        response_format: { type: 'json_object' },
-      })
-      .withResponse();
+  return new Promise((resolve, reject) => {
+    const proc = spawn('claude', [
+      '-p', prompt,
+      '--output-format', 'stream-json',
+      '--verbose',
+      '--include-partial-messages',
+      '--allowedTools', 'Read',
+    ], { stdio: ['ignore', 'pipe', 'pipe'] });
 
-    saveGroqRateLimits(apiKey, extractRateLimitHeaders(response));
-    clearGroqError(apiKey);
+    let fullText = '';
+    let stderr = '';
 
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) throw new Error(`Groq returned empty response: ${JSON.stringify(data).slice(0, 500)}`);
-    return content;
-  } catch (err) {
-    saveGroqError(apiKey, (err as Error).message);
-    throw err;
-  }
-}
+    let phase = 'thinking';  // thinking → reading → generating
 
-// --------------- Chunking (for Groq free tier) ---------------
+    const rl = createInterface({ input: proc.stdout });
+    rl.on('line', (line: string) => {
+      if (!line.trim()) return;
+      try {
+        const evt = JSON.parse(line);
+        const deltaType = evt.event?.delta?.type ?? '';
 
-const TOKENS_PER_BLOCK = 30;
-const RESERVED_TOKENS = 3500;
+        // Track phase transitions for progress display
+        if (deltaType === 'thinking_delta' && phase !== 'thinking') {
+          phase = 'thinking';
+        } else if (deltaType === 'input_json_delta' && phase !== 'reading') {
+          phase = 'reading';
+          onProgress?.(-1);  // signal "reading" phase
+        } else if (deltaType === 'text_delta') {
+          phase = 'generating';
+          fullText += evt.event.delta.text;
+          onProgress?.(fullText.length);
+        }
 
-const GROQ_MODEL_TPM: Record<string, number> = {
-  'llama-3.3-70b-versatile': 12_000,
-  'llama-3.1-8b-instant': 6_000,
-  'meta-llama/llama-4-scout-17b-16e-instruct': 30_000,
-};
+        // Final result
+        if (evt.type === 'result' && typeof evt.result === 'string') {
+          fullText = evt.result;
+        }
+      } catch { /* skip non-JSON lines */ }
+    });
 
-function splitSrtIntoChunks(srtContent: string, maxBlocks: number): string[] {
-  const blocks = srtContent.split(/\n\s*\n/).filter((b) => b.trim());
-  const chunks: string[] = [];
-  for (let i = 0; i < blocks.length; i += maxBlocks) {
-    chunks.push(blocks.slice(i, i + maxBlocks).join('\n\n'));
-  }
-  return chunks;
-}
+    proc.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+    proc.on('close', (code: number | null) => {
+      if (code !== 0) {
+        reject(new Error(`claude CLI failed (exit ${code}): ${stderr.trim()}`));
+        return;
+      }
+      const output = fullText.trim();
+      if (!output) {
+        reject(new Error('claude CLI returned empty output'));
+        return;
+      }
+      resolve(output);
+    });
+
+    proc.on('error', (err: Error) => {
+      reject(new Error(`claude CLI failed: ${err.message}`));
+    });
+  });
 }
 
 // --------------- Parse ---------------
 
 function parseAnalysisResponse(output: string): AnalysisData {
   let cleaned = output;
-  if (cleaned.startsWith('```')) {
-    const lines = cleaned.split('\n');
-    cleaned = lines.filter((l) => !l.trim().startsWith('```')).join('\n');
+
+  // Strip markdown code fences if present
+  if (cleaned.includes('```')) {
+    cleaned = cleaned.replace(/```(?:json)?\s*/g, '').replace(/```\s*/g, '');
   }
 
+  // Try direct parse first
   let data: any;
   try {
-    data = JSON.parse(cleaned);
-  } catch (e) {
-    throw new Error(`LLM returned invalid JSON: ${(e as Error).message}\n\nRaw:\n${output.slice(0, 500)}`);
+    data = JSON.parse(cleaned.trim());
+  } catch {
+    // Extract JSON object from mixed text (Claude may add explanation before/after)
+    const start = cleaned.indexOf('{');
+    const end = cleaned.lastIndexOf('}');
+    if (start === -1 || end === -1 || end <= start) {
+      throw new Error(`No JSON object found in LLM output.\n\nRaw:\n${output.slice(0, 500)}`);
+    }
+    try {
+      data = JSON.parse(cleaned.slice(start, end + 1));
+    } catch (e) {
+      throw new Error(`LLM returned invalid JSON: ${(e as Error).message}\n\nRaw:\n${output.slice(0, 500)}`);
+    }
   }
 
   if (!data.sections || !data.clips) {
@@ -134,7 +158,7 @@ function parseAnalysisResponse(output: string): AnalysisData {
 // --------------- Main handler ---------------
 
 export function registerAnalyzerHandlers(): void {
-  ipcMain.handle('analyzer:analyze', async (event, projectId: string, _provider: string, model: string) => {
+  ipcMain.handle('analyzer:analyze', async (event, projectId: string) => {
     const project = getProjectById(projectId);
     if (!project) return { success: false, error: 'Project not found' };
 
@@ -142,15 +166,12 @@ export function registerAnalyzerHandlers(): void {
     if (!fs.existsSync(paths.srt)) return { success: false, error: 'No SRT file. Transcribe first.' };
 
     const win = BrowserWindow.fromWebContents(event.sender);
+    const model = 'claude';
 
     try {
       win?.webContents.send('analyzer:status', projectId, 'analyzing');
 
       const srtContent = fs.readFileSync(paths.srt, 'utf8');
-
-      const tpm = GROQ_MODEL_TPM[model] ?? 12_000;
-      const maxBlocks = Math.max(50, Math.floor((tpm - RESERVED_TOKENS) / TOKENS_PER_BLOCK));
-      const chunks = splitSrtIntoChunks(srtContent, maxBlocks);
 
       // Find the last timestamp in the SRT to clamp analysis results
       const maxMs = (() => {
@@ -160,80 +181,45 @@ export function registerAnalyzerHandlers(): void {
         return (+last[1] * 3600 + +last[2] * 60 + +last[3]) * 1000 + +last[4];
       })();
 
-      console.log(`[analyzer] model=${model} tpm=${tpm} maxBlocks=${maxBlocks} chunks=${chunks.length} srtLength=${srtContent.length} maxMs=${maxMs}`);
+      console.log(`[analyzer] using Claude CLI, srtLength=${srtContent.length} maxMs=${maxMs}`);
 
-      // Resume from saved progress
-      interface AnalysisProgress {
-        model: string;
-        currentChunk: number;
-        numChunks: number;
-        sections: AnalysisSection[];
-        clips: AnalysisClip[];
-      }
-      const saved = readProjectFile<AnalysisProgress>(projectId, paths.analysisProgress);
-      const canResume = saved && saved.model === model && saved.numChunks === chunks.length && saved.currentChunk < chunks.length;
+      // Write SRT to temp file to avoid command-line length limits
+      const tmpPath = path.join(os.tmpdir(), `vodcut-${projectId}.srt`);
+      fs.writeFileSync(tmpPath, srtContent, 'utf8');
 
-      const allSections: AnalysisSection[] = canResume ? saved.sections : [];
-      const allClips: AnalysisClip[] = canResume ? saved.clips : [];
-      let startChunk = canResume ? saved.currentChunk : 0;
-
-      if (canResume) {
-        console.log(`[analyzer] resuming from chunk ${startChunk + 1}/${chunks.length}`);
-        win?.webContents.send('analyzer:status', projectId, JSON.stringify({ key: 'player.analyzingResume', current: startChunk, total: chunks.length }));
-      }
-
-      for (let i = startChunk; i < chunks.length; i++) {
-        const chunkLabel = chunks.length > 1 ? JSON.stringify({ key: 'player.analyzingChunk', current: i + 1, total: chunks.length }) : 'analyzing';
-        win?.webContents.send('analyzer:status', projectId, chunkLabel);
-
-        const userMessage = `以下是逐字稿內容${chunkLabel}（注意：這段逐字稿的時間範圍到 ${maxMs} 毫秒為止，所有時間戳不得超過此值）：\n\n${chunks[i]}`;
-        console.log(`[analyzer] chunk ${i + 1}/${chunks.length} sending (${userMessage.length} chars)...`);
+      let analysisData: AnalysisData;
+      try {
         const t0 = Date.now();
-        const output = await callGroq(SYSTEM_PROMPT, userMessage, model);
-        console.log(`[analyzer] chunk ${i + 1}/${chunks.length} done in ${((Date.now() - t0) / 1000).toFixed(1)}s (${output.length} chars)`);
-        const partial = parseAnalysisResponse(output);
-
-        allSections.push(...partial.sections);
-        allClips.push(...partial.clips);
-
-        // Persist progress after each chunk
-        writeProjectFile(paths.analysisProgress, {
-          model, currentChunk: i + 1, numChunks: chunks.length,
-          sections: allSections, clips: allClips,
-        });
-
-        // Wait between chunks to respect rate limit
-        if (i < chunks.length - 1) {
-          console.log(`[analyzer] waiting 60s for rate limit...`);
-          // Send countdown updates every second
-          for (let s = 60; s > 0; s--) {
-            win?.webContents.send('analyzer:status', projectId, JSON.stringify({ key: 'player.analyzingWait', seconds: s, current: i + 1, total: chunks.length }));
-            await sleep(1_000);
+        const output = await callClaude(tmpPath, (chars) => {
+          if (chars === -1) {
+            // Reading file phase
+            win?.webContents.send('analyzer:status', projectId, JSON.stringify({ key: 'player.analyzingReading' }));
+          } else {
+            // Generating response phase
+            win?.webContents.send('analyzer:status', projectId, JSON.stringify({ key: 'player.analyzingProgress', chars }));
           }
-        }
+        });
+        console.log(`[analyzer] Claude done in ${((Date.now() - t0) / 1000).toFixed(1)}s (${output.length} chars)`);
+        analysisData = parseAnalysisResponse(output);
+      } finally {
+        try { fs.unlinkSync(tmpPath); } catch {}
       }
 
-      // Clean up progress file
-      try { fs.unlinkSync(paths.analysisProgress); } catch {}
-
-      // Clamp timestamps to SRT duration
-      for (const sec of allSections) {
+      // Clamp timestamps
+      for (const sec of analysisData.sections) {
         sec.startMs = Math.min(sec.startMs, maxMs);
         sec.endMs = Math.min(sec.endMs, maxMs);
       }
-      for (const clip of allClips) {
+      for (const clip of analysisData.clips) {
         clip.startMs = Math.min(clip.startMs, maxMs);
         clip.endMs = Math.min(clip.endMs, maxMs);
       }
 
-      const analysisData: AnalysisData = { sections: allSections, clips: allClips };
-
-      // Save analysis per model
+      // Save analysis
       if (!fs.existsSync(paths.analysisDir)) fs.mkdirSync(paths.analysisDir, { recursive: true });
       const modelFile = path.join(paths.analysisDir, `${modelToFilename(model)}.json`);
       writeProjectFile(modelFile, analysisData);
 
-      // Also keep legacy analysis.json (latest result) + copy next to video
       writeProjectFile(paths.analysis, analysisData);
       const videoDir = path.dirname(project.filePath);
       const videoName = path.basename(project.filePath, path.extname(project.filePath));
@@ -247,39 +233,19 @@ export function registerAnalyzerHandlers(): void {
     }
   });
 
-  ipcMain.handle('analyzer:getProgress', (_event, projectId: string) => {
-    const paths = projectPaths(projectId);
-    return readProjectFile<{ model: string; currentChunk: number; numChunks: number }>(projectId, paths.analysisProgress);
-  });
-
   ipcMain.handle('analyzer:getData', (_event, projectId: string) => {
     const paths = projectPaths(projectId);
     return readProjectFile<AnalysisData>(projectId, paths.analysis);
   });
 
-  /** List all saved analysis models for a project, in ANALYSIS_MODELS order. */
   ipcMain.handle('analyzer:listModels', (_event, projectId: string) => {
     const paths = projectPaths(projectId);
     if (!fs.existsSync(paths.analysisDir)) return [];
-    const saved = new Set(
-      fs.readdirSync(paths.analysisDir)
-        .filter((f) => f.endsWith('.json'))
-        .map((f) => f.replace(/\.json$/, '').replace(/_/g, '/'))
-    );
-    // Return in canonical model order, then any unknown models at the end
-    const MODEL_ORDER = [
-      'meta-llama/llama-4-scout-17b-16e-instruct',
-      'llama-3.3-70b-versatile',
-      'llama-3.1-8b-instant',
-    ];
-    const ordered = MODEL_ORDER.filter((m) => saved.has(m));
-    for (const m of saved) {
-      if (!ordered.includes(m)) ordered.push(m);
-    }
-    return ordered;
+    return fs.readdirSync(paths.analysisDir)
+      .filter((f) => f.endsWith('.json'))
+      .map((f) => f.replace(/\.json$/, '').replace(/_/g, '/'));
   });
 
-  /** Load analysis for a specific model. */
   ipcMain.handle('analyzer:getDataForModel', (_event, projectId: string, model: string) => {
     const paths = projectPaths(projectId);
     const modelFile = path.join(paths.analysisDir, `${modelToFilename(model)}.json`);

@@ -14,11 +14,6 @@ const TRANSCRIPTION_MODELS = [
   { value: "whisper-large-v3-turbo", label: "Whisper V3 Turbo" },
 ] as const
 
-const ANALYSIS_MODELS = [
-  { value: "groq:meta-llama/llama-4-scout-17b-16e-instruct", label: "Llama 4 Scout 17B" },
-  { value: "groq:llama-3.3-70b-versatile", label: "Llama 3.3 70B" },
-  { value: "groq:llama-3.1-8b-instant", label: "Llama 3.1 8B" },
-] as const
 
 // ── SRT parsing ──────────────────────────────────────────────
 
@@ -367,16 +362,13 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
   // Analysis state
   const [analysis, setAnalysis] = useState<AnalysisData | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
-  const [analysisModelKey, setAnalysisModelKey] = useState("groq:meta-llama/llama-4-scout-17b-16e-instruct")
   const [analysisStage, setAnalysisStage] = useState("")
-  const [savedAnalysisProgress, setSavedAnalysisProgress] = useState<{ model: string; current: number; total: number } | null>(null)
   const [savedModels, setSavedModels] = useState<string[]>([])
   const [activeAnalysisModel, setActiveAnalysisModel] = useState<string | null>(null)
   const [panelTab, setPanelTab] = useState<"srt" | "analysis">("srt")
 
   // API key availability
   const [hasTranscriptionKey, setHasTranscriptionKey] = useState(false)
-  const [hasGroqKey, setHasGroqKey] = useState(false)
 
   // Clip playback: play only a specific time range
   const [activeClip, setActiveClip] = useState<{ startMs: number; endMs: number } | null>(null)
@@ -392,7 +384,6 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
   useEffect(() => {
     window.electronAPI.getBackendSettings().then((s) => {
       setHasTranscriptionKey(s.transcriptionApiKeys?.length > 0)
-      setHasGroqKey(!!s.groqApiKey)
     })
     window.electronAPI.getTranscriptionProgress(projectId).then((p) => {
       if (p && p.currentChunk < p.numChunks) {
@@ -424,15 +415,6 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
         window.electronAPI.getAnalysisData(projectId).then((data) => {
           if (data) setAnalysis(data)
         })
-      }
-    })
-  }, [projectId])
-
-  // Check for saved analysis progress (for resume)
-  useEffect(() => {
-    window.electronAPI.getAnalysisProgress(projectId).then((p) => {
-      if (p && p.currentChunk < p.numChunks) {
-        setSavedAnalysisProgress({ model: p.model, current: p.currentChunk, total: p.numChunks })
       }
     })
   }, [projectId])
@@ -500,15 +482,12 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
 
   const handleAnalyze = useCallback(async () => {
     setAnalyzing(true)
-    setSavedAnalysisProgress(null)
     setAnalysisStage(t("player.analyzing"))
     try {
-      const [provider, model] = analysisModelKey.split(":", 2)
-      const result = await window.electronAPI.analyzeProject(projectId, provider, model)
+      const result = await window.electronAPI.analyzeProject(projectId)
       if (result.success && result.data) {
         setAnalysis(result.data)
-        setActiveAnalysisModel(model)
-        // Refresh saved models list
+        setActiveAnalysisModel(result.model ?? "claude")
         const models = await window.electronAPI.listAnalysisModels(projectId)
         setSavedModels(models)
       } else {
@@ -521,7 +500,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
     } finally {
       setAnalyzing(false)
     }
-  }, [projectId, analysisModelKey])
+  }, [projectId])
 
   // Subtitle update + clip boundary check (driven by onTimeUpdate callback)
   const updateSubtitle = useCallback((timeSec: number) => {
@@ -739,29 +718,13 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
           {/* Step 2: Analysis */}
           <div className="flex items-center gap-1">
             {!analyzing ? (
-              <>
-                <Select value={analysisModelKey} onValueChange={setAnalysisModelKey}>
-                  <SelectTrigger className="h-8 w-44 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ANALYSIS_MODELS.map((m) => (
-                      <SelectItem key={m.value} value={m.value} className="text-xs">
-                        {m.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button variant="outline" size="sm" onClick={handleAnalyze}
-                  disabled={!hasSrt || !hasGroqKey}
-                  title={!hasSrt ? t("player.analyzeNoSrt") : undefined}
-                >
-                  <Sparkles className="mr-1 size-4" />
-                  {savedAnalysisProgress
-                    ? t("player.resumeAnalyze", { current: savedAnalysisProgress.current, total: savedAnalysisProgress.total })
-                    : analysis ? t("player.reanalyze") : t("player.analyze")}
-                </Button>
-              </>
+              <Button variant="outline" size="sm" onClick={handleAnalyze}
+                disabled={!hasSrt}
+                title={!hasSrt ? t("player.analyzeNoSrt") : undefined}
+              >
+                <Sparkles className="mr-1 size-4" />
+                {analysis ? t("player.reanalyze") : t("player.analyze")}
+              </Button>
             ) : (
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" disabled>
@@ -897,7 +860,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
               {savedModels.length > 1 && (
                 <div className="flex items-center gap-1 border-b px-3 py-1.5">
                   {savedModels.map((m) => {
-                    const label = ANALYSIS_MODELS.find((am) => am.value === `groq:${m}`)?.label ?? m.split("/").pop()
+                    const label = m === "claude" ? "Claude" : m.split("/").pop()
                     const isActive = activeAnalysisModel === m
                     return (
                       <button
