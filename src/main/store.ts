@@ -42,6 +42,45 @@ export const settingsStore = new Store<SettingsSchema>({
   },
 });
 
+// --- Rate limit store (Groq API usage per key) ---
+
+export interface RateLimitInfo {
+  limitRequests: number;
+  remainingRequests: number;
+  limitTokens: number;
+  remainingTokens: number;
+  resetRequests: string;
+  resetTokens: string;
+  updatedAt: string;
+}
+
+interface RateLimitsSchema {
+  /** Keyed by last-8-chars of API key */
+  keys: Record<string, RateLimitInfo>;
+}
+
+export const rateLimitsStore = new Store<RateLimitsSchema>({
+  name: 'rate-limits',
+  defaults: { keys: {} },
+});
+
+/** Extract rate limit headers from a Groq HTTP response and persist them. */
+export function saveGroqRateLimits(apiKey: string, headers: Record<string, string | string[] | undefined>): void {
+  const keyId = apiKey.slice(-8);
+  const info: RateLimitInfo = {
+    limitRequests: Number(headers['x-ratelimit-limit-requests']) || 0,
+    remainingRequests: Number(headers['x-ratelimit-remaining-requests']) || 0,
+    limitTokens: Number(headers['x-ratelimit-limit-tokens']) || 0,
+    remainingTokens: Number(headers['x-ratelimit-remaining-tokens']) || 0,
+    resetRequests: String(headers['x-ratelimit-reset-requests'] ?? ''),
+    resetTokens: String(headers['x-ratelimit-reset-tokens'] ?? ''),
+    updatedAt: new Date().toISOString(),
+  };
+  const all = rateLimitsStore.get('keys', {});
+  all[keyId] = info;
+  rateLimitsStore.set('keys', all);
+}
+
 // --- Project store (lightweight index) ---
 
 interface ProjectSchema {

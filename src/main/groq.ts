@@ -4,7 +4,7 @@ import fs from 'fs';
 import https from 'https';
 import crypto from 'crypto';
 import { spawn } from 'child_process';
-import { getProjectById, updateProject, projectPaths, readProjectFile, writeProjectFile, type TranscriptionProgress } from './store';
+import { getProjectById, updateProject, projectPaths, readProjectFile, writeProjectFile, saveGroqRateLimits, type TranscriptionProgress } from './store';
 import { type SrtSegment, segmentsToSrt } from './whisper';
 
 const ffmpegPath = path.join(process.cwd(), 'node_modules', 'ffmpeg-static', 'ffmpeg.exe');
@@ -84,6 +84,9 @@ function uploadToGroq(filePath: string, apiKey: string, model: string): Promise<
         'Content-Length': body.length,
       },
     }, (res) => {
+      // Capture rate limit headers
+      saveGroqRateLimits(apiKey, res.headers as Record<string, string | string[] | undefined>);
+
       const chunks: Buffer[] = [];
       res.on('data', (chunk) => chunks.push(chunk));
       res.on('end', () => {

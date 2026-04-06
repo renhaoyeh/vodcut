@@ -19,7 +19,11 @@
     "geminiLabel": "Gemini (Analysis)",
     "geminiHelp": "For LLM analysis. Get your key at <link>aistudio.google.com</link>",
     "save": "Save",
-    "saved": "Saved"
+    "saved": "Saved",
+    "rateLimitRequests": "Daily requests: {{remaining}} / {{limit}} remaining",
+    "rateLimitTokens": "Tokens per min: {{remaining}} / {{limit}} remaining",
+    "rateLimitUpdatedAt": "Updated at {{time}}",
+    "rateLimitNoData": "No usage data yet (updates after API use)"
   },
   "player": {
     "transcribe": "Transcribe",

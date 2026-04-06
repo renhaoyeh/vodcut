@@ -19,7 +19,11 @@
     "geminiLabel": "Gemini（分析）",
     "geminiHelp": "用於 LLM 分析。至 <link>aistudio.google.com</link> 取得金鑰",
     "save": "儲存",
-    "saved": "已儲存"
+    "saved": "已儲存",
+    "rateLimitRequests": "今日請求：剩餘 {{remaining}} / {{limit}}",
+    "rateLimitTokens": "每分鐘 Token：剩餘 {{remaining}} / {{limit}}",
+    "rateLimitUpdatedAt": "更新於 {{time}}",
+    "rateLimitNoData": "尚無用量資料（使用 API 後自動更新）"
   },
   "player": {
     "transcribe": "轉錄",

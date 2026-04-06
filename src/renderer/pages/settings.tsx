@@ -14,6 +14,28 @@ import {
 } from "@/renderer/components/ui/dialog"
 import { Settings } from "lucide-react"
 import { toast } from "sonner"
+import type { RateLimitInfo } from "@/main/store"
+
+function RateLimitBadge({ info, t }: { info: RateLimitInfo | undefined; t: (key: string, opts?: Record<string, unknown>) => string }) {
+  if (!info) return <p className="text-xs text-muted-foreground/60">{t("settings.rateLimitNoData")}</p>
+  const updatedTime = new Date(info.updatedAt).toLocaleTimeString()
+  const reqPct = info.limitRequests > 0 ? info.remainingRequests / info.limitRequests : 0
+  const barColor = reqPct > 0.3 ? "bg-emerald-500" : reqPct > 0.1 ? "bg-amber-500" : "bg-red-500"
+  return (
+    <div className="space-y-1 rounded-md bg-muted/50 px-2.5 py-1.5 text-xs">
+      <div className="flex items-center gap-2">
+        <span className="text-muted-foreground">{t("settings.rateLimitRequests", { remaining: info.remainingRequests, limit: info.limitRequests })}</span>
+      </div>
+      <div className="h-1.5 w-full rounded-full bg-muted">
+        <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${Math.max(reqPct * 100, 1)}%` }} />
+      </div>
+      <div className="flex items-center justify-between text-muted-foreground/60">
+        <span>{t("settings.rateLimitTokens", { remaining: info.remainingTokens.toLocaleString(), limit: info.limitTokens.toLocaleString() })}</span>
+        <span>{t("settings.rateLimitUpdatedAt", { time: updatedTime })}</span>
+      </div>
+    </div>
+  )
+}
 
 export function SettingsDialog() {
   const { t } = useTranslation()
@@ -21,6 +43,7 @@ export function SettingsDialog() {
   const [transcriptionApiKeys, setTranscriptionApiKeys] = useState("")
   const [groqApiKey, setGroqApiKey] = useState("")
   const [geminiApiKey, setGeminiApiKey] = useState("")
+  const [rateLimits, setRateLimits] = useState<Record<string, RateLimitInfo>>({})
 
   useEffect(() => {
     if (!open) return
@@ -29,6 +52,7 @@ export function SettingsDialog() {
       setGroqApiKey(s.groqApiKey)
       setGeminiApiKey(s.geminiApiKey)
     })
+    window.electronAPI.getRateLimits().then(setRateLimits)
   }, [open])
 
   const handleTranscriptionApiKeysSave = useCallback(async () => {
@@ -76,6 +100,16 @@ export function SettingsDialog() {
             <p className="text-xs text-muted-foreground">
               <Trans i18nKey="settings.transcriptionHelp" components={{ link: <a href="https://console.groq.com" className="underline" target="_blank" rel="noreferrer" /> }} />
             </p>
+            {transcriptionApiKeys.split("\n").map(k => k.trim()).filter(Boolean).map((key) => {
+              const keyId = key.slice(-8)
+              const info = rateLimits[keyId]
+              return (
+                <div key={keyId} className="space-y-1">
+                  <p className="text-xs font-mono text-muted-foreground">...{keyId}</p>
+                  <RateLimitBadge info={info} t={t} />
+                </div>
+              )
+            })}
           </div>
           <div className="space-y-2">
             <Label htmlFor="groq-api-key" className="text-sm">{t("settings.groqLabel")}</Label>
@@ -92,6 +126,9 @@ export function SettingsDialog() {
             <p className="text-xs text-muted-foreground">
               <Trans i18nKey="settings.groqHelp" components={{ link: <a href="https://console.groq.com" className="underline" target="_blank" rel="noreferrer" /> }} />
             </p>
+            {groqApiKey && (
+              <RateLimitBadge info={rateLimits[groqApiKey.slice(-8)]} t={t} />
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="gemini-api-key" className="text-sm">{t("settings.geminiLabel")}</Label>

@@ -2,7 +2,7 @@ import { ipcMain, BrowserWindow } from 'electron';
 import https from 'https';
 import fs from 'fs';
 import path from 'path';
-import { getProjectById, updateProject, settingsStore, projectPaths, writeProjectFile, readProjectFile } from './store';
+import { getProjectById, updateProject, settingsStore, projectPaths, writeProjectFile, readProjectFile, saveGroqRateLimits } from './store';
 
 const SYSTEM_PROMPT = `你是一位專業的影片剪輯顧問。使用者會給你一段影片的逐字稿（SRT 格式，含時間戳記），
 請你分析內容並以 **純 JSON** 回傳（不要加 markdown code fence），格式如下：
@@ -54,7 +54,12 @@ export interface AnalysisData {
 
 // --------------- HTTP helper ---------------
 
-function httpsPost(hostname: string, urlPath: string, headers: Record<string, string>, body: string): Promise<string> {
+interface HttpResponse {
+  body: string;
+  headers: Record<string, string | string[] | undefined>;
+}
+
+function httpsPost(hostname: string, urlPath: string, headers: Record<string, string>, body: string): Promise<HttpResponse> {
   return new Promise((resolve, reject) => {
     const req = https.request({
       hostname,
@@ -74,7 +79,7 @@ function httpsPost(hostname: string, urlPath: string, headers: Record<string, st
           reject(new Error(`API error (${res.statusCode}): ${text}`));
           return;
         }
-        resolve(text);
+        resolve({ body: text, headers: res.headers as Record<string, string | string[] | undefined> });
       });
     });
 
@@ -106,10 +111,11 @@ function callGroq(systemPrompt: string, userMessage: string, model: string): Pro
 
   return httpsPost('api.groq.com', '/openai/v1/chat/completions', {
     'Authorization': `Bearer ${apiKey}`,
-  }, body).then((text) => {
-    const json = JSON.parse(text);
+  }, body).then((res) => {
+    saveGroqRateLimits(apiKey, res.headers);
+    const json = JSON.parse(res.body);
     const content = json.choices?.[0]?.message?.content;
-    if (!content) throw new Error(`Groq returned empty response: ${text.slice(0, 500)}`);
+    if (!content) throw new Error(`Groq returned empty response: ${res.body.slice(0, 500)}`);
     return content;
   });
 }
@@ -132,10 +138,10 @@ function callGemini(systemPrompt: string, userMessage: string, model: string): P
 
   return httpsPost('generativelanguage.googleapis.com', '/v1beta/openai/chat/completions', {
     'Authorization': `Bearer ${apiKey}`,
-  }, body).then((text) => {
-    const json = JSON.parse(text);
+  }, body).then((res) => {
+    const json = JSON.parse(res.body);
     const content = json.choices?.[0]?.message?.content;
-    if (!content) throw new Error(`Gemini returned empty response: ${text.slice(0, 500)}`);
+    if (!content) throw new Error(`Gemini returned empty response: ${res.body.slice(0, 500)}`);
     return content;
   });
 }

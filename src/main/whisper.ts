@@ -1,6 +1,6 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import fs from 'fs';
-import { getProjectById, settingsStore, projectPaths, readProjectFile } from './store';
+import { getProjectById, settingsStore, projectPaths, readProjectFile, rateLimitsStore } from './store';
 import type { GroqModel, TranscriptionProgress } from './store';
 import { transcribeWithGroq } from './groq';
 
@@ -56,6 +56,10 @@ export function registerWhisperHandlers(): void {
   ipcMain.handle('settings:setTranscriptionApiKeys', (_event, keys: string[]) => {
     settingsStore.set('transcriptionApiKeys', keys);
     return { success: true };
+  });
+
+  ipcMain.handle('settings:getRateLimits', () => {
+    return rateLimitsStore.get('keys', {});
   });
 
   ipcMain.handle('whisper:getProgress', (_event, projectId: string) => {
