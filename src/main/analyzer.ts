@@ -56,17 +56,21 @@ export interface AnalysisData {
 
 // --------------- Claude CLI ---------------
 
-async function callClaude(srtPath: string, onProgress?: (chars: number) => void): Promise<string> {
+async function callClaude(srtPath: string, model?: string, onProgress?: (chars: number) => void): Promise<string> {
   const prompt = `${SYSTEM_PROMPT}\n\n逐字稿檔案路徑：${srtPath}\n請讀取這個檔案並進行分析。`;
 
   return new Promise((resolve, reject) => {
-    const proc = spawn('claude', [
+    const args = [
       '-p', prompt,
       '--output-format', 'stream-json',
       '--verbose',
       '--include-partial-messages',
       '--allowedTools', 'Read',
-    ], { stdio: ['ignore', 'pipe', 'pipe'] });
+    ];
+    if (model) {
+      args.push('--model', model);
+    }
+    const proc = spawn('claude', args, { stdio: ['ignore', 'pipe', 'pipe'] });
 
     let fullText = '';
     let stderr = '';
@@ -158,7 +162,7 @@ function parseAnalysisResponse(output: string): AnalysisData {
 // --------------- Main handler ---------------
 
 export function registerAnalyzerHandlers(): void {
-  ipcMain.handle('analyzer:analyze', async (event, projectId: string) => {
+  ipcMain.handle('analyzer:analyze', async (event, projectId: string, requestedModel?: string) => {
     const project = getProjectById(projectId);
     if (!project) return { success: false, error: 'Project not found' };
 
@@ -166,7 +170,7 @@ export function registerAnalyzerHandlers(): void {
     if (!fs.existsSync(paths.srt)) return { success: false, error: 'No SRT file. Transcribe first.' };
 
     const win = BrowserWindow.fromWebContents(event.sender);
-    const model = 'claude';
+    const model = requestedModel || 'claude';
 
     try {
       win?.webContents.send('analyzer:status', projectId, 'analyzing');
@@ -181,7 +185,7 @@ export function registerAnalyzerHandlers(): void {
         return (+last[1] * 3600 + +last[2] * 60 + +last[3]) * 1000 + +last[4];
       })();
 
-      console.log(`[analyzer] using Claude CLI, srtLength=${srtContent.length} maxMs=${maxMs}`);
+      console.log(`[analyzer] using Claude CLI (model=${model}), srtLength=${srtContent.length} maxMs=${maxMs}`);
 
       // Write SRT to temp file to avoid command-line length limits
       const tmpPath = path.join(os.tmpdir(), `vodcut-${projectId}.srt`);
@@ -190,7 +194,7 @@ export function registerAnalyzerHandlers(): void {
       let analysisData: AnalysisData;
       try {
         const t0 = Date.now();
-        const output = await callClaude(tmpPath, (chars) => {
+        const output = await callClaude(tmpPath, requestedModel || undefined, (chars) => {
           if (chars === -1) {
             // Reading file phase
             win?.webContents.send('analyzer:status', projectId, JSON.stringify({ key: 'player.analyzingReading' }));

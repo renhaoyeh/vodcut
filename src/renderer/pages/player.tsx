@@ -15,6 +15,12 @@ const TRANSCRIPTION_MODELS = [
   { value: "whisper-large-v3-turbo", label: "Whisper V3 Turbo" },
 ] as const
 
+const CLAUDE_MODELS = [
+  { value: "sonnet", label: "Sonnet" },
+  { value: "opus", label: "Opus" },
+  { value: "haiku", label: "Haiku" },
+] as const
+
 
 // ── SRT parsing ──────────────────────────────────────────────
 
@@ -358,6 +364,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
   const [transcribeStage, setTranscribeStage] = useState("")
   const [transcribeProgress, setTranscribeProgress] = useState(0)
   const [transcriptionModelKey, setTranscriptionModelKey] = useState("whisper-large-v3")
+  const [claudeModelKey, setClaudeModelKey] = useState("sonnet")
   const [savedProgress, setSavedProgress] = useState<{ current: number; total: number } | null>(null)
 
   // Analysis state
@@ -485,11 +492,16 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
     }
   }, [projectId, transcriptionModelKey])
 
+  // Wrap claudeModelKey in a ref so handleAnalyze always sees the latest value
+  const claudeModelRef = useRef(claudeModelKey)
+  claudeModelRef.current = claudeModelKey
+
   const handleAnalyze = useCallback(async () => {
     setAnalyzing(true)
     setAnalysisStage(t("player.analyzing"))
     try {
-      const result = await window.electronAPI.analyzeProject(projectId)
+      const selectedModel = claudeModelRef.current
+      const result = await window.electronAPI.analyzeProject(projectId, selectedModel)
       if (result.success && result.data) {
         setAnalysis(result.data)
         setActiveAnalysisModel(result.model ?? "claude")
@@ -738,13 +750,27 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
           {/* Step 2: Analysis */}
           <div className="flex items-center gap-1">
             {!analyzing ? (
-              <Button variant="outline" size="sm" onClick={handleAnalyze}
-                disabled={!hasSrt}
-                title={!hasSrt ? t("player.analyzeNoSrt") : undefined}
-              >
-                <Sparkles className="mr-1 size-4" />
-                {analysis ? t("player.reanalyze") : t("player.analyze")}
-              </Button>
+              <>
+                <Select value={claudeModelKey} onValueChange={setClaudeModelKey}>
+                  <SelectTrigger className="h-8 w-36 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CLAUDE_MODELS.map((m) => (
+                      <SelectItem key={m.value} value={m.value} className="text-xs">
+                        {m.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button variant="outline" size="sm" onClick={handleAnalyze}
+                  disabled={!hasSrt}
+                  title={!hasSrt ? t("player.analyzeNoSrt") : undefined}
+                >
+                  <Sparkles className="mr-1 size-4" />
+                  {analysis ? t("player.reanalyze") : t("player.analyze")}
+                </Button>
+              </>
             ) : (
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" disabled>

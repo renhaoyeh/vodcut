@@ -15,7 +15,7 @@ interface ElectronAPI {
   onFfmpegProgress: (callback: (projectId: string, percent: number) => void) => () => void;
 
   // Analyzer
-  analyzeProject: (projectId: string) => Promise<{ success: boolean; data?: AnalysisData; model?: string; error?: string }>;
+  analyzeProject: (projectId: string, model?: string) => Promise<{ success: boolean; data?: AnalysisData; model?: string; error?: string }>;
   getAnalysisData: (projectId: string) => Promise<AnalysisData | null>;
   listAnalysisModels: (projectId: string) => Promise<string[]>;
   getAnalysisDataForModel: (projectId: string, model: string) => Promise<AnalysisData | null>;
