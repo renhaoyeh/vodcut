@@ -6,6 +6,7 @@ import { plugins } from './webpack.plugins';
 export const mainConfig: Configuration = {
   externals: {
     'ffmpeg-static': 'commonjs2 ffmpeg-static',
+    'groq-sdk': 'commonjs2 groq-sdk',
   },
   /**
    * This is the main entry point for your application, it's the first file

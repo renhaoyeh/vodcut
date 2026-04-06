@@ -1,11 +1,10 @@
 import { BrowserWindow, app } from 'electron';
 import path from 'path';
 import fs from 'fs';
-import https from 'https';
-import crypto from 'crypto';
 import { spawn } from 'child_process';
 import { getProjectById, updateProject, projectPaths, readProjectFile, writeProjectFile, saveGroqRateLimits, type TranscriptionProgress } from './store';
 import { type SrtSegment, segmentsToSrt } from './whisper';
+import { getGroqClient, extractRateLimitHeaders } from './groq-client';
 
 const ffmpegPath = path.join(process.cwd(), 'node_modules', 'ffmpeg-static', 'ffmpeg.exe');
 
@@ -47,69 +46,21 @@ interface GroqResponse {
   segments: GroqSegment[];
 }
 
-function uploadToGroq(filePath: string, apiKey: string, model: string): Promise<GroqResponse> {
-  const boundary = '----FormBoundary' + crypto.randomBytes(16).toString('hex');
-  const fileData = fs.readFileSync(filePath);
-  const fileName = path.basename(filePath);
+async function uploadToGroq(filePath: string, apiKey: string, model: string): Promise<GroqResponse> {
+  const client = getGroqClient(apiKey);
+  const { data, response } = await client.audio.transcriptions
+    .create({
+      file: fs.createReadStream(filePath),
+      model,
+      language: 'zh',
+      response_format: 'verbose_json',
+      temperature: 0,
+    })
+    .withResponse();
 
-  const fields: Array<[string, string]> = [
-    ['model', model],
-    ['language', 'zh'],
-    ['response_format', 'verbose_json'],
-    ['temperature', '0'],
-  ];
+  saveGroqRateLimits(apiKey, extractRateLimitHeaders(response));
 
-  const parts: Buffer[] = [];
-  for (const [key, val] of fields) {
-    parts.push(Buffer.from(
-      `--${boundary}\r\nContent-Disposition: form-data; name="${key}"\r\n\r\n${val}\r\n`
-    ));
-  }
-  parts.push(Buffer.from(
-    `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${fileName}"\r\nContent-Type: audio/wav\r\n\r\n`
-  ));
-  parts.push(fileData);
-  parts.push(Buffer.from(`\r\n--${boundary}--\r\n`));
-
-  const body = Buffer.concat(parts);
-
-  return new Promise((resolve, reject) => {
-    const req = https.request({
-      hostname: 'api.groq.com',
-      path: '/openai/v1/audio/transcriptions',
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': `multipart/form-data; boundary=${boundary}`,
-        'Content-Length': body.length,
-      },
-    }, (res) => {
-      // Capture rate limit headers
-      saveGroqRateLimits(apiKey, res.headers as Record<string, string | string[] | undefined>);
-
-      const chunks: Buffer[] = [];
-      res.on('data', (chunk) => chunks.push(chunk));
-      res.on('end', () => {
-        const text = Buffer.concat(chunks).toString();
-        if (res.statusCode !== 200) {
-          try {
-            const err = JSON.parse(text);
-            if (err?.error?.message) { reject(new Error(err.error.message)); return; }
-          } catch { /* fall through */ }
-          reject(new Error(`Groq API error (${res.statusCode}): ${text}`));
-          return;
-        }
-        try {
-          resolve(JSON.parse(text) as GroqResponse);
-        } catch {
-          reject(new Error(`Invalid Groq response: ${text}`));
-        }
-      });
-    });
-    req.on('error', reject);
-    req.write(body);
-    req.end();
-  });
+  return data as unknown as GroqResponse;
 }
 
 export async function transcribeWithGroq(

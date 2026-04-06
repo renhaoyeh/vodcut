@@ -3,6 +3,7 @@ import https from 'https';
 import fs from 'fs';
 import path from 'path';
 import { getProjectById, updateProject, settingsStore, projectPaths, writeProjectFile, readProjectFile, saveGroqRateLimits } from './store';
+import { getGroqClient, extractRateLimitHeaders } from './groq-client';
 
 const SYSTEM_PROMPT = `你是一位專業的影片剪輯顧問。使用者會給你一段影片的逐字稿（SRT 格式，含時間戳記），
 請你分析內容並以 **純 JSON** 回傳（不要加 markdown code fence），格式如下：
@@ -95,29 +96,28 @@ function httpsPost(hostname: string, urlPath: string, headers: Record<string, st
 
 // --------------- Groq ---------------
 
-function callGroq(systemPrompt: string, userMessage: string, model: string): Promise<string> {
+async function callGroq(systemPrompt: string, userMessage: string, model: string): Promise<string> {
   const apiKey = settingsStore.get('groqApiKey', '') as string;
-  if (!apiKey) return Promise.reject(new Error('Groq API key not set. Please configure it in Settings.'));
+  if (!apiKey) throw new Error('Groq API key not set. Please configure it in Settings.');
 
-  const body = JSON.stringify({
-    model,
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userMessage },
-    ],
-    temperature: 0,
-    response_format: { type: 'json_object' },
-  });
+  const client = getGroqClient(apiKey);
+  const { data, response } = await client.chat.completions
+    .create({
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage },
+      ],
+      temperature: 0,
+      response_format: { type: 'json_object' },
+    })
+    .withResponse();
 
-  return httpsPost('api.groq.com', '/openai/v1/chat/completions', {
-    'Authorization': `Bearer ${apiKey}`,
-  }, body).then((res) => {
-    saveGroqRateLimits(apiKey, res.headers);
-    const json = JSON.parse(res.body);
-    const content = json.choices?.[0]?.message?.content;
-    if (!content) throw new Error(`Groq returned empty response: ${res.body.slice(0, 500)}`);
-    return content;
-  });
+  saveGroqRateLimits(apiKey, extractRateLimitHeaders(response));
+
+  const content = data.choices?.[0]?.message?.content;
+  if (!content) throw new Error(`Groq returned empty response: ${JSON.stringify(data).slice(0, 500)}`);
+  return content;
 }
 
 // --------------- Gemini ---------------
