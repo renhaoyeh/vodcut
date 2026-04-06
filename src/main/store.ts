@@ -6,6 +6,7 @@ import path from 'path';
 export interface TranscriptionProgress {
   currentChunk: number;
   numChunks: number;
+  chunkRanges: Array<{ startSec: number; endSec: number }>;
   segments: Array<{ index: number; startMs: number; endMs: number; text: string }>;
   segIdx: number;
 }

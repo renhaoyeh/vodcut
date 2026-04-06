@@ -212,18 +212,24 @@ export async function transcribeWithGroq(
   try {
     const totalSec = getAudioDuration(audioPath);
 
-    // Detect silence gaps for smart chunking
-    win?.webContents.send('whisper:stage', projectId, JSON.stringify({ key: 'player.detectingSilence' }));
-    const silences = await detectSilences(audioPath);
-    const chunkRanges = buildChunkRanges(totalSec, silences);
-    const numChunks = chunkRanges.length;
-    console.log(`[whisper] detected ${silences.length} silence gaps -> ${numChunks} chunks`);
-
     // Resume from saved progress
     const saved = readProjectFile<TranscriptionProgress>(projectId, paths.progress);
     const allSegments: SrtSegment[] = saved?.segments ?? [];
     let segIdx = saved?.segIdx ?? 1;
     let c = saved?.currentChunk ?? 0;
+
+    // Reuse cached chunk ranges when resuming; otherwise detect silence gaps
+    let chunkRanges: ChunkRange[];
+    if (saved?.chunkRanges && c > 0) {
+      chunkRanges = saved.chunkRanges;
+      console.log(`[whisper] resuming with ${chunkRanges.length} cached chunks (skipped silence detection)`);
+    } else {
+      win?.webContents.send('whisper:stage', projectId, JSON.stringify({ key: 'player.detectingSilence' }));
+      const silences = await detectSilences(audioPath);
+      chunkRanges = buildChunkRanges(totalSec, silences);
+      console.log(`[whisper] detected ${silences.length} silence gaps -> ${chunkRanges.length} chunks`);
+    }
+    const numChunks = chunkRanges.length;
 
     if (saved && c > 0) {
       win?.webContents.send('whisper:stage', projectId, JSON.stringify({ key: 'player.resumeRecognizing', current: c, total: numChunks }));
@@ -265,7 +271,7 @@ export async function transcribeWithGroq(
       c++;
 
       // Persist progress after each chunk
-      writeProjectFile(paths.progress, { currentChunk: c, numChunks, segments: allSegments, segIdx });
+      writeProjectFile(paths.progress, { currentChunk: c, numChunks, chunkRanges, segments: allSegments, segIdx });
     }
 
     win?.webContents.send('whisper:progress', projectId, 100);
