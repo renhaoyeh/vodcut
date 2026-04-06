@@ -126,8 +126,8 @@ function PlaybackControls({
         size="icon"
         className={
           isPlaying
-            ? "size-8 rounded-full border border-white/10 bg-white/10 text-white shadow-none hover:bg-white/20"
-            : "size-8 rounded-full border border-white/10 bg-white text-black shadow-[0_0_15px_rgba(255,255,255,0.3)] hover:scale-105 hover:bg-white/90"
+            ? "size-8 rounded-full border border-white/10 bg-white/10 text-white shadow-none hover:bg-white/20 hover:text-white"
+            : "size-8 rounded-full border border-white/10 bg-white text-black shadow-[0_0_15px_rgba(255,255,255,0.3)] hover:scale-105 hover:bg-white/90 hover:text-black"
         }
       >
         {isPlaying ? (
@@ -199,7 +199,7 @@ function PlaybackControls({
           onClick={handleToggleMute}
           variant="ghost"
           size="icon"
-          className="size-7 shrink-0 rounded-full border border-transparent text-white shadow-none hover:border-white/10 hover:bg-white/10"
+          className="size-7 shrink-0 rounded-full border border-transparent text-white shadow-none hover:border-white/10 hover:bg-white/10 hover:text-white"
         >
           {volume === 0 ? (
             <VolumeX className="size-3.5" />
@@ -224,7 +224,7 @@ function PlaybackControls({
         onClick={onToggleFullscreen}
         variant="ghost"
         size="icon"
-        className="ml-0.5 size-7 shrink-0 rounded-full border border-transparent text-white shadow-none hover:border-white/10 hover:bg-white/10"
+        className="ml-0.5 size-7 shrink-0 rounded-full border border-transparent text-white shadow-none hover:border-white/10 hover:bg-white/10 hover:text-white"
       >
         {isFullscreen ? (
           <Minimize className="size-3.5" />
