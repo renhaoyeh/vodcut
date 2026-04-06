@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowLeft, Maximize, Minimize, Pause, Play, Loader2, Sparkles, ListVideo, Scissors, Volume2, VolumeX, Mic, FileText } from "lucide-react"
+import { ArrowLeft, Maximize, Minimize, Pause, Play, Loader2, Sparkles, ListVideo, Scissors, Volume2, VolumeX, Mic, FileText, ArrowDown } from "lucide-react"
 import { Button } from "@/renderer/components/ui/button"
 import { Separator } from "@/renderer/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/renderer/components/ui/select"
@@ -377,6 +377,8 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
 
   const hideTimerRef = useRef<ReturnType<typeof setTimeout>>(null)
   const subtitlesRef = useRef<Subtitle[]>([])
+  const [srtAutoScroll, setSrtAutoScroll] = useState(true)
+  const activeSrtRef = useRef<HTMLDivElement>(null)
   subtitlesRef.current = subtitles
   const handlersRef = useRef<ReturnType<typeof createVideoEventHandlers> | null>(null)
 
@@ -833,26 +835,37 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
             </div>
 
             {panelTab === "srt" && (
-              <ScrollArea className="flex-1">
-                {subtitles.map((sub, i) => {
-                  const active = currentMs >= sub.startMs && currentMs < sub.endMs
-                  return (
-                    <div
-                      key={i}
-                      ref={active ? (el) => { el?.scrollIntoView({ block: "nearest", behavior: "smooth" }) } : undefined}
-                      className={`border-b px-3 py-2 transition-colors hover:bg-accent cursor-pointer ${
-                        active ? "bg-accent/50 border-l-2 border-l-primary" : ""
-                      }`}
-                      onClick={() => { setActiveClip(null); seekToMs(sub.startMs) }}
-                    >
-                      <span className="text-[10px] tabular-nums text-muted-foreground">
-                        {formatMs(sub.startMs)} – {formatMs(sub.endMs)}
-                      </span>
-                      <p className="mt-0.5 text-sm">{sub.text}</p>
-                    </div>
-                  )
-                })}
-              </ScrollArea>
+              <div className="relative flex-1 overflow-hidden">
+                <ScrollArea className="h-full" onWheel={() => { if (srtAutoScroll) setSrtAutoScroll(false) }}>
+                  {subtitles.map((sub, i) => {
+                    const active = currentMs >= sub.startMs && currentMs < sub.endMs
+                    return (
+                      <div
+                        key={i}
+                        ref={active ? (el) => { activeSrtRef.current = el; if (srtAutoScroll) el?.scrollIntoView({ block: "nearest", behavior: "smooth" }) } : undefined}
+                        className={`border-b px-3 py-2 transition-colors hover:bg-accent cursor-pointer ${
+                          active ? "bg-accent/50 border-l-2 border-l-primary" : ""
+                        }`}
+                        onClick={() => { setActiveClip(null); seekToMs(sub.startMs) }}
+                      >
+                        <span className="text-[10px] tabular-nums text-muted-foreground">
+                          {formatMs(sub.startMs)} – {formatMs(sub.endMs)}
+                        </span>
+                        <p className="mt-0.5 text-sm">{sub.text}</p>
+                      </div>
+                    )
+                  })}
+                </ScrollArea>
+                {!srtAutoScroll && (
+                  <button
+                    className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground shadow-lg transition-opacity hover:opacity-90"
+                    onClick={() => { setSrtAutoScroll(true); activeSrtRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }) }}
+                  >
+                    <ArrowDown className="size-3.5" />
+                    {t("player.scrollToActive")}
+                  </button>
+                )}
+              </div>
             )}
 
             {panelTab === "analysis" && analysis && (

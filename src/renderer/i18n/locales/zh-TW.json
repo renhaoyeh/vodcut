@@ -45,6 +45,7 @@
     "tabAnalysis": "分析",
     "tabSections": "段落 ({{count}})",
     "tabClips": "剪輯建議 ({{count}})",
+    "scrollToActive": "回到目前字幕",
     "playingClickToCancel": "播放中 · 點擊取消",
     "clearClip": "✕ 片段"
   }

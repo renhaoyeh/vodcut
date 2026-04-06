@@ -45,6 +45,7 @@
     "tabAnalysis": "Analysis",
     "tabSections": "Sections ({{count}})",
     "tabClips": "Clip suggestions ({{count}})",
+    "scrollToActive": "Back to current",
     "playingClickToCancel": "Playing · Click to cancel",
     "clearClip": "✕ Clip"
   }
