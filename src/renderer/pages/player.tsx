@@ -565,8 +565,8 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
       // play: from openscreen VideoPlayback.play()
       allowPlaybackRef.current = true
       video.play().catch((err) => {
+        if (err.name !== "AbortError") console.error("Video play failed:", err)
         allowPlaybackRef.current = false
-        console.error("Video play failed:", err)
       })
     }
   }, [isPlaying])
