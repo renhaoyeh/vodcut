@@ -9,8 +9,8 @@ import type { AnalysisData } from "@/main/store"
 import { toast } from "sonner"
 
 const TRANSCRIPTION_MODELS = [
-  { value: "whisper-large-v3-turbo", label: "Whisper V3 Turbo" },
   { value: "whisper-large-v3", label: "Whisper V3" },
+  { value: "whisper-large-v3-turbo", label: "Whisper V3 Turbo" },
 ] as const
 
 const ANALYSIS_MODELS = [
