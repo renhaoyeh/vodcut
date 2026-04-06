@@ -222,13 +222,26 @@ export function registerAnalyzerHandlers(): void {
     return readProjectFile<AnalysisData>(projectId, paths.analysis);
   });
 
-  /** List all saved analysis models for a project. */
+  /** List all saved analysis models for a project, in ANALYSIS_MODELS order. */
   ipcMain.handle('analyzer:listModels', (_event, projectId: string) => {
     const paths = projectPaths(projectId);
     if (!fs.existsSync(paths.analysisDir)) return [];
-    return fs.readdirSync(paths.analysisDir)
-      .filter((f) => f.endsWith('.json'))
-      .map((f) => f.replace(/\.json$/, '').replace(/_/g, '/'));
+    const saved = new Set(
+      fs.readdirSync(paths.analysisDir)
+        .filter((f) => f.endsWith('.json'))
+        .map((f) => f.replace(/\.json$/, '').replace(/_/g, '/'))
+    );
+    // Return in canonical model order, then any unknown models at the end
+    const MODEL_ORDER = [
+      'meta-llama/llama-4-scout-17b-16e-instruct',
+      'llama-3.3-70b-versatile',
+      'llama-3.1-8b-instant',
+    ];
+    const ordered = MODEL_ORDER.filter((m) => saved.has(m));
+    for (const m of saved) {
+      if (!ordered.includes(m)) ordered.push(m);
+    }
+    return ordered;
   });
 
   /** Load analysis for a specific model. */
