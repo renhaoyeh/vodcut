@@ -52,14 +52,12 @@ export function SettingsDialog() {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [transcriptionKeys, setTranscriptionKeys] = useState<string[]>([])
-  const [groqApiKey, setGroqApiKey] = useState("")
   const [rateLimits, setRateLimits] = useState<Record<string, RateLimitInfo>>({})
 
   useEffect(() => {
     if (!open) return
     window.electronAPI.getBackendSettings().then((s) => {
       setTranscriptionKeys(s.transcriptionApiKeys?.length ? s.transcriptionApiKeys : [""])
-      setGroqApiKey(s.groqApiKey)
     })
     window.electronAPI.getRateLimits().then(setRateLimits)
   }, [open])
@@ -85,13 +83,10 @@ export function SettingsDialog() {
 
   const handleSave = useCallback(async () => {
     const cleanedKeys = transcriptionKeys.map(k => k.trim()).filter(Boolean)
-    await Promise.all([
-      window.electronAPI.setTranscriptionApiKeys(cleanedKeys),
-      window.electronAPI.setGroqApiKey(groqApiKey),
-    ])
+    await window.electronAPI.setTranscriptionApiKeys(cleanedKeys)
     toast.success(t("settings.saved"), { duration: 1500 })
     setOpen(false)
-  }, [transcriptionKeys, groqApiKey, t])
+  }, [transcriptionKeys, t])
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -140,22 +135,6 @@ export function SettingsDialog() {
               <Plus className="mr-1.5 size-3.5" />
               {t("settings.addKey")}
             </Button>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="groq-api-key" className="text-sm">{t("settings.groqLabel")}</Label>
-            <Input
-              id="groq-api-key"
-              type="password"
-              placeholder="gsk_..."
-              value={groqApiKey}
-              onChange={(e) => setGroqApiKey(e.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">
-              <Trans i18nKey="settings.groqHelp" components={{ link: <a href="https://console.groq.com" className="underline" target="_blank" rel="noreferrer" /> }} />
-            </p>
-            {groqApiKey && (
-              <RateLimitBadge info={rateLimits[groqApiKey.slice(-8)]} t={t} />
-            )}
           </div>
         </div>
         <DialogFooter>

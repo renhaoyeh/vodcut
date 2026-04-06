@@ -11,11 +11,9 @@
   },
   "settings": {
     "title": "Settings",
-    "description": "API keys for transcription and analysis services.",
+    "description": "API keys for transcription services.",
     "transcriptionLabel": "Groq Whisper (Transcription)",
     "transcriptionHelp": "One key per line. Multiple keys rotate automatically to avoid rate limits. Get yours at <link>console.groq.com</link>",
-    "groqLabel": "Groq LLM (Analysis)",
-    "groqHelp": "For LLM analysis. Get your key at <link>console.groq.com</link>",
     "addKey": "Add Key",
     "cancel": "Cancel",
     "save": "Save",

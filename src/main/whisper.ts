@@ -38,13 +38,7 @@ export function registerWhisperHandlers(): void {
 
     return {
       transcriptionApiKeys: settingsStore.get('transcriptionApiKeys', []),
-      groqApiKey: settingsStore.get('groqApiKey', ''),
     };
-  });
-
-  ipcMain.handle('settings:setGroqApiKey', (_event, key: string) => {
-    settingsStore.set('groqApiKey', key);
-    return { success: true };
   });
 
   ipcMain.handle('settings:setTranscriptionApiKeys', (_event, keys: string[]) => {

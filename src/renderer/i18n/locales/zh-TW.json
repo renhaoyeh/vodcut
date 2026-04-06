@@ -11,11 +11,9 @@
   },
   "settings": {
     "title": "設定",
-    "description": "轉錄與分析服務的 API 金鑰。",
+    "description": "轉錄服務的 API 金鑰。",
     "transcriptionLabel": "Groq Whisper（轉錄）",
     "transcriptionHelp": "每行一把 key，多把 key 會自動輪替以避免速率限制。至 <link>console.groq.com</link> 取得",
-    "groqLabel": "Groq LLM（分析）",
-    "groqHelp": "用於 LLM 分析。至 <link>console.groq.com</link> 取得金鑰",
     "addKey": "新增 Key",
     "cancel": "取消",
     "save": "儲存",

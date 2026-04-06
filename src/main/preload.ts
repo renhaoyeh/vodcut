@@ -34,7 +34,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Settings
   getBackendSettings: () => ipcRenderer.invoke('settings:getAll'),
   setTranscriptionApiKeys: (keys: string[]) => ipcRenderer.invoke('settings:setTranscriptionApiKeys', keys),
-  setGroqApiKey: (key: string) => ipcRenderer.invoke('settings:setGroqApiKey', key),
   getRateLimits: () => ipcRenderer.invoke('settings:getRateLimits'),
   getTranscriptionProgress: (projectId: string) => ipcRenderer.invoke('whisper:getProgress', projectId),
   transcribe: (projectId: string, model: string) => ipcRenderer.invoke('whisper:transcribe', projectId, model),

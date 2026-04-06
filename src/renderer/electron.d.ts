@@ -24,10 +24,8 @@ interface ElectronAPI {
   // Settings
   getBackendSettings: () => Promise<{
     transcriptionApiKeys: string[];
-    groqApiKey: string;
   }>;
   setTranscriptionApiKeys: (keys: string[]) => Promise<{ success: boolean }>;
-  setGroqApiKey: (key: string) => Promise<{ success: boolean }>;
   getRateLimits: () => Promise<Record<string, RateLimitInfo>>;
   getTranscriptionProgress: (projectId: string) => Promise<TranscriptionProgress | null>;
   transcribe: (projectId: string, model: string) => Promise<{ success: boolean; srtPath?: string; error?: string }>;
