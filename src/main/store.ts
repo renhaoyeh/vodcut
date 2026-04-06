@@ -52,6 +52,8 @@ export interface RateLimitInfo {
   resetRequests: string;
   resetTokens: string;
   updatedAt: string;
+  lastError?: string;
+  lastErrorAt?: string;
 }
 
 interface RateLimitsSchema {
@@ -77,8 +79,41 @@ export function saveGroqRateLimits(apiKey: string, headers: Record<string, strin
     updatedAt: new Date().toISOString(),
   };
   const all = rateLimitsStore.get('keys', {});
+  // Preserve existing error info when updating rate limits
+  const existing = all[keyId];
+  if (existing?.lastError) {
+    info.lastError = existing.lastError;
+    info.lastErrorAt = existing.lastErrorAt;
+  }
   all[keyId] = info;
   rateLimitsStore.set('keys', all);
+}
+
+/** Save an API error for a specific key so it can be displayed in Settings. */
+export function saveGroqError(apiKey: string, error: string): void {
+  const keyId = apiKey.slice(-8);
+  const all = rateLimitsStore.get('keys', {});
+  const existing = all[keyId] ?? {
+    limitRequests: 0, remainingRequests: 0,
+    limitTokens: 0, remainingTokens: 0,
+    resetRequests: '', resetTokens: '',
+    updatedAt: new Date().toISOString(),
+  };
+  existing.lastError = error;
+  existing.lastErrorAt = new Date().toISOString();
+  all[keyId] = existing;
+  rateLimitsStore.set('keys', all);
+}
+
+/** Clear the stored error for a specific key (e.g. after a successful call). */
+export function clearGroqError(apiKey: string): void {
+  const keyId = apiKey.slice(-8);
+  const all = rateLimitsStore.get('keys', {});
+  if (all[keyId]) {
+    delete all[keyId].lastError;
+    delete all[keyId].lastErrorAt;
+    rateLimitsStore.set('keys', all);
+  }
 }
 
 // --- Project store (lightweight index) ---

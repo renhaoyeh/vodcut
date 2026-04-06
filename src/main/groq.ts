@@ -2,7 +2,7 @@ import { BrowserWindow, app } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { spawn } from 'child_process';
-import { getProjectById, updateProject, projectPaths, readProjectFile, writeProjectFile, saveGroqRateLimits, type TranscriptionProgress } from './store';
+import { getProjectById, updateProject, projectPaths, readProjectFile, writeProjectFile, saveGroqRateLimits, saveGroqError, clearGroqError, type TranscriptionProgress } from './store';
 import { type SrtSegment, segmentsToSrt } from './whisper';
 import { getGroqClient, extractRateLimitHeaders } from './groq-client';
 
@@ -48,19 +48,25 @@ interface GroqResponse {
 
 async function uploadToGroq(filePath: string, apiKey: string, model: string): Promise<GroqResponse> {
   const client = getGroqClient(apiKey);
-  const { data, response } = await client.audio.transcriptions
-    .create({
-      file: fs.createReadStream(filePath),
-      model,
-      language: 'zh',
-      response_format: 'verbose_json',
-      temperature: 0,
-    })
-    .withResponse();
+  try {
+    const { data, response } = await client.audio.transcriptions
+      .create({
+        file: fs.createReadStream(filePath),
+        model,
+        language: 'zh',
+        response_format: 'verbose_json',
+        temperature: 0,
+      })
+      .withResponse();
 
-  saveGroqRateLimits(apiKey, extractRateLimitHeaders(response));
+    saveGroqRateLimits(apiKey, extractRateLimitHeaders(response));
+    clearGroqError(apiKey);
 
-  return data as unknown as GroqResponse;
+    return data as unknown as GroqResponse;
+  } catch (err) {
+    saveGroqError(apiKey, (err as Error).message);
+    throw err;
+  }
 }
 
 export async function transcribeWithGroq(

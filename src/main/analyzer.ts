@@ -2,7 +2,7 @@ import { ipcMain, BrowserWindow } from 'electron';
 import https from 'https';
 import fs from 'fs';
 import path from 'path';
-import { getProjectById, updateProject, settingsStore, projectPaths, writeProjectFile, readProjectFile, saveGroqRateLimits } from './store';
+import { getProjectById, updateProject, settingsStore, projectPaths, writeProjectFile, readProjectFile, saveGroqRateLimits, saveGroqError, clearGroqError } from './store';
 import { getGroqClient, extractRateLimitHeaders } from './groq-client';
 
 const SYSTEM_PROMPT = `你是一位專業的影片剪輯顧問。使用者會給你一段影片的逐字稿（SRT 格式，含時間戳記），
@@ -101,23 +101,29 @@ async function callGroq(systemPrompt: string, userMessage: string, model: string
   if (!apiKey) throw new Error('Groq API key not set. Please configure it in Settings.');
 
   const client = getGroqClient(apiKey);
-  const { data, response } = await client.chat.completions
-    .create({
-      model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userMessage },
-      ],
-      temperature: 0,
-      response_format: { type: 'json_object' },
-    })
-    .withResponse();
+  try {
+    const { data, response } = await client.chat.completions
+      .create({
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userMessage },
+        ],
+        temperature: 0,
+        response_format: { type: 'json_object' },
+      })
+      .withResponse();
 
-  saveGroqRateLimits(apiKey, extractRateLimitHeaders(response));
+    saveGroqRateLimits(apiKey, extractRateLimitHeaders(response));
+    clearGroqError(apiKey);
 
-  const content = data.choices?.[0]?.message?.content;
-  if (!content) throw new Error(`Groq returned empty response: ${JSON.stringify(data).slice(0, 500)}`);
-  return content;
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) throw new Error(`Groq returned empty response: ${JSON.stringify(data).slice(0, 500)}`);
+    return content;
+  } catch (err) {
+    saveGroqError(apiKey, (err as Error).message);
+    throw err;
+  }
 }
 
 // --------------- Gemini ---------------

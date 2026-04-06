@@ -24,6 +24,14 @@ function RateLimitBadge({ info, t }: { info: RateLimitInfo | undefined; t: (key:
   const barColor = reqPct > 0.3 ? "bg-emerald-500" : reqPct > 0.1 ? "bg-amber-500" : "bg-red-500"
   return (
     <div className="space-y-1 rounded-md bg-muted/50 px-2.5 py-1.5 text-xs">
+      {info.lastError && (
+        <div className="rounded bg-destructive/10 px-2 py-1 text-destructive">
+          {info.lastError}
+          {info.lastErrorAt && (
+            <span className="ml-1.5 text-destructive/60">({new Date(info.lastErrorAt).toLocaleTimeString()})</span>
+          )}
+        </div>
+      )}
       <div className="flex items-center gap-2">
         <span className="text-muted-foreground">{t("settings.rateLimitRequests", { remaining: info.remainingRequests, limit: info.limitRequests })}</span>
       </div>
