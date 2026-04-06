@@ -8,11 +8,12 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/renderer/components/ui/dialog"
-import { Settings } from "lucide-react"
+import { Settings, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import type { RateLimitInfo } from "@/main/store"
 
@@ -40,7 +41,7 @@ function RateLimitBadge({ info, t }: { info: RateLimitInfo | undefined; t: (key:
 export function SettingsDialog() {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
-  const [transcriptionApiKeys, setTranscriptionApiKeys] = useState("")
+  const [transcriptionKeys, setTranscriptionKeys] = useState<string[]>([])
   const [groqApiKey, setGroqApiKey] = useState("")
   const [geminiApiKey, setGeminiApiKey] = useState("")
   const [rateLimits, setRateLimits] = useState<Record<string, RateLimitInfo>>({})
@@ -48,28 +49,42 @@ export function SettingsDialog() {
   useEffect(() => {
     if (!open) return
     window.electronAPI.getBackendSettings().then((s) => {
-      setTranscriptionApiKeys((s.transcriptionApiKeys ?? []).join("\n"))
+      setTranscriptionKeys(s.transcriptionApiKeys?.length ? s.transcriptionApiKeys : [""])
       setGroqApiKey(s.groqApiKey)
       setGeminiApiKey(s.geminiApiKey)
     })
     window.electronAPI.getRateLimits().then(setRateLimits)
   }, [open])
 
-  const handleTranscriptionApiKeysSave = useCallback(async () => {
-    const keys = transcriptionApiKeys.split("\n").map(k => k.trim()).filter(Boolean)
-    await window.electronAPI.setTranscriptionApiKeys(keys)
-    toast.success(t("settings.saved"), { duration: 1500 })
-  }, [transcriptionApiKeys, t])
+  const updateKey = useCallback((index: number, value: string) => {
+    setTranscriptionKeys(prev => {
+      const next = [...prev]
+      next[index] = value
+      return next
+    })
+  }, [])
 
-  const handleGroqApiKeySave = useCallback(async () => {
-    await window.electronAPI.setGroqApiKey(groqApiKey)
-    toast.success(t("settings.saved"), { duration: 1500 })
-  }, [groqApiKey, t])
+  const removeKey = useCallback((index: number) => {
+    setTranscriptionKeys(prev => {
+      const next = prev.filter((_, i) => i !== index)
+      return next.length ? next : [""]
+    })
+  }, [])
 
-  const handleGeminiApiKeySave = useCallback(async () => {
-    await window.electronAPI.setGeminiApiKey(geminiApiKey)
+  const addKey = useCallback(() => {
+    setTranscriptionKeys(prev => [...prev, ""])
+  }, [])
+
+  const handleSave = useCallback(async () => {
+    const cleanedKeys = transcriptionKeys.map(k => k.trim()).filter(Boolean)
+    await Promise.all([
+      window.electronAPI.setTranscriptionApiKeys(cleanedKeys),
+      window.electronAPI.setGroqApiKey(groqApiKey),
+      window.electronAPI.setGeminiApiKey(geminiApiKey),
+    ])
     toast.success(t("settings.saved"), { duration: 1500 })
-  }, [geminiApiKey, t])
+    setOpen(false)
+  }, [transcriptionKeys, groqApiKey, geminiApiKey, t])
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -85,44 +100,49 @@ export function SettingsDialog() {
         </DialogHeader>
         <div className="space-y-5 pt-2">
           <div className="space-y-2">
-            <Label htmlFor="transcription-api-keys" className="text-sm">{t("settings.transcriptionLabel")}</Label>
-            <div className="flex gap-2">
-              <textarea
-                id="transcription-api-keys"
-                className="flex min-h-15 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                placeholder={"gsk_...\ngsk_..."}
-                value={transcriptionApiKeys}
-                onChange={(e) => setTranscriptionApiKeys(e.target.value)}
-                rows={3}
-              />
-              <Button size="sm" className="self-start" onClick={handleTranscriptionApiKeysSave}>{t("settings.save")}</Button>
-            </div>
+            <Label className="text-sm">{t("settings.transcriptionLabel")}</Label>
             <p className="text-xs text-muted-foreground">
               <Trans i18nKey="settings.transcriptionHelp" components={{ link: <a href="https://console.groq.com" className="underline" target="_blank" rel="noreferrer" /> }} />
             </p>
-            {transcriptionApiKeys.split("\n").map(k => k.trim()).filter(Boolean).map((key) => {
-              const keyId = key.slice(-8)
-              const info = rateLimits[keyId]
-              return (
-                <div key={keyId} className="space-y-1">
-                  <p className="text-xs font-mono text-muted-foreground">...{keyId}</p>
-                  <RateLimitBadge info={info} t={t} />
+            <div className="space-y-3">
+              {transcriptionKeys.map((key, i) => (
+                <div key={i} className="space-y-1.5">
+                  <div className="flex gap-2">
+                    <Input
+                      type="password"
+                      placeholder="gsk_..."
+                      value={key}
+                      onChange={(e) => updateKey(i, e.target.value)}
+                    />
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="shrink-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => removeKey(i)}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
+                  {key.trim() && (
+                    <RateLimitBadge info={rateLimits[key.trim().slice(-8)]} t={t} />
+                  )}
                 </div>
-              )
-            })}
+              ))}
+            </div>
+            <Button size="sm" variant="outline" className="w-full" onClick={addKey} disabled={transcriptionKeys.length > 0 && !transcriptionKeys[transcriptionKeys.length - 1].trim()}>
+              <Plus className="mr-1.5 size-3.5" />
+              {t("settings.addKey")}
+            </Button>
           </div>
           <div className="space-y-2">
             <Label htmlFor="groq-api-key" className="text-sm">{t("settings.groqLabel")}</Label>
-            <div className="flex gap-2">
-              <Input
-                id="groq-api-key"
-                type="password"
-                placeholder="gsk_..."
-                value={groqApiKey}
-                onChange={(e) => setGroqApiKey(e.target.value)}
-              />
-              <Button size="sm" onClick={handleGroqApiKeySave}>{t("settings.save")}</Button>
-            </div>
+            <Input
+              id="groq-api-key"
+              type="password"
+              placeholder="gsk_..."
+              value={groqApiKey}
+              onChange={(e) => setGroqApiKey(e.target.value)}
+            />
             <p className="text-xs text-muted-foreground">
               <Trans i18nKey="settings.groqHelp" components={{ link: <a href="https://console.groq.com" className="underline" target="_blank" rel="noreferrer" /> }} />
             </p>
@@ -132,21 +152,22 @@ export function SettingsDialog() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="gemini-api-key" className="text-sm">{t("settings.geminiLabel")}</Label>
-            <div className="flex gap-2">
-              <Input
-                id="gemini-api-key"
-                type="password"
-                placeholder="AIza..."
-                value={geminiApiKey}
-                onChange={(e) => setGeminiApiKey(e.target.value)}
-              />
-              <Button size="sm" onClick={handleGeminiApiKeySave}>{t("settings.save")}</Button>
-            </div>
+            <Input
+              id="gemini-api-key"
+              type="password"
+              placeholder="AIza..."
+              value={geminiApiKey}
+              onChange={(e) => setGeminiApiKey(e.target.value)}
+            />
             <p className="text-xs text-muted-foreground">
               <Trans i18nKey="settings.geminiHelp" components={{ link: <a href="https://aistudio.google.com/apikey" className="underline" target="_blank" rel="noreferrer" /> }} />
             </p>
           </div>
         </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>{t("settings.cancel")}</Button>
+          <Button onClick={handleSave}>{t("settings.save")}</Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

@@ -18,6 +18,8 @@
     "groqHelp": "用於 LLM 分析。至 <link>console.groq.com</link> 取得金鑰",
     "geminiLabel": "Gemini（分析）",
     "geminiHelp": "用於 LLM 分析。至 <link>aistudio.google.com</link> 取得金鑰",
+    "addKey": "新增 Key",
+    "cancel": "取消",
     "save": "儲存",
     "saved": "已儲存",
     "rateLimitRequests": "今日請求：剩餘 {{remaining}} / {{limit}}",

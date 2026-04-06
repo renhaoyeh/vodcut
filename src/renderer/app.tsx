@@ -86,7 +86,7 @@ function App() {
           />
         )}
       </main>
-      <Toaster richColors position="top-center" />
+      <Toaster richColors position="bottom-right" expand style={{ zIndex: 9999 }} />
     </div>
   )
 }
