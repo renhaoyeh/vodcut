@@ -36,9 +36,43 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setTranscriptionApiKeys: (keys: string[]) => ipcRenderer.invoke('settings:setTranscriptionApiKeys', keys),
   getRateLimits: () => ipcRenderer.invoke('settings:getRateLimits'),
   getTranscriptionProgress: (projectId: string) => ipcRenderer.invoke('whisper:getProgress', projectId),
-  transcribe: (projectId: string, model: string) => ipcRenderer.invoke('whisper:transcribe', projectId, model),
+  transcribe: (projectId: string, model: string, autoRefine: boolean = true) =>
+    ipcRenderer.invoke('whisper:transcribe', projectId, model, autoRefine),
+  retranscribeSegment: (
+    projectId: string,
+    startMs: number,
+    endMs: number,
+    contextBefore: string,
+    contextAfter: string,
+    model: string,
+  ) => ipcRenderer.invoke('whisper:retranscribeSegment', projectId, startMs, endMs, contextBefore, contextAfter, model),
+  retranscribeRange: (
+    projectId: string,
+    startMs: number,
+    endMs: number,
+    contextBefore: string,
+    contextAfter: string,
+    model: string,
+  ) => ipcRenderer.invoke('whisper:retranscribeRange', projectId, startMs, endMs, contextBefore, contextAfter, model),
   readSrt: (projectId: string) => ipcRenderer.invoke('store:readSrt', projectId),
   saveSrt: (projectId: string, content: string) => ipcRenderer.invoke('store:saveSrt', projectId, content),
+  readSegments: (projectId: string) => ipcRenderer.invoke('store:readSegments', projectId),
+  saveSegments: (projectId: string, segments: unknown) => ipcRenderer.invoke('store:saveSegments', projectId, segments),
+
+  // Clip export (C1/C2)
+  exportClip: (projectId: string, clip: { title: string; startMs: number; endMs: number }, options: { burnSubtitles: boolean; precise: boolean }) =>
+    ipcRenderer.invoke('exporter:exportClip', projectId, clip, options),
+  revealInFolder: (filePath: string) => ipcRenderer.invoke('exporter:revealInFolder', filePath),
+  onExportProgress: (callback: (projectId: string, clipKey: string, percent: number) => void) => {
+    const listener = (_event: any, projectId: string, clipKey: string, percent: number) => callback(projectId, clipKey, percent);
+    ipcRenderer.on('exporter:progress', listener);
+    return () => ipcRenderer.removeListener('exporter:progress', listener);
+  },
+
+  // Vocabulary extraction (A2)
+  extractVocabulary: (projectId: string) => ipcRenderer.invoke('analyzer:extractVocabulary', projectId),
+  saveVocabulary: (projectId: string, terms: string[]) => ipcRenderer.invoke('store:saveVocabulary', projectId, terms),
+  readVocabulary: (projectId: string) => ipcRenderer.invoke('store:readVocabulary', projectId),
   onWhisperProgress: (callback: (projectId: string, percent: number) => void) => {
     const listener = (_event: any, projectId: string, percent: number) => callback(projectId, percent);
     ipcRenderer.on('whisper:progress', listener);

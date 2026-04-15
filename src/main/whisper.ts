@@ -2,13 +2,15 @@ import { ipcMain, BrowserWindow } from 'electron';
 import fs from 'fs';
 import { getProjectById, settingsStore, projectPaths, readProjectFile, rateLimitsStore } from './store';
 import type { GroqModel, TranscriptionProgress } from './store';
-import { transcribeWithGroq } from './groq';
+import { transcribeWithGroq, retranscribeSingleSegment, retranscribeRangeSegments } from './groq';
 
 export interface SrtSegment {
   index: number;
   startMs: number;
   endMs: number;
   text: string;
+  /** Whisper `avg_logprob` (roughly -inf..0; higher is more confident). */
+  confidence?: number;
 }
 
 function formatTimestamp(ms: number): string {
@@ -55,7 +57,7 @@ export function registerWhisperHandlers(): void {
     return readProjectFile<TranscriptionProgress>(projectId, paths.progress);
   });
 
-  ipcMain.handle('whisper:transcribe', async (event, projectId: string, model: string) => {
+  ipcMain.handle('whisper:transcribe', async (event, projectId: string, model: string, autoRefine: boolean = true) => {
     const project = getProjectById(projectId);
     if (!project) {
       return { success: false, error: 'Project not found' };
@@ -71,6 +73,32 @@ export function registerWhisperHandlers(): void {
       return { success: false, error: 'Groq API key not configured. Set it in Settings.' };
     }
     const win = BrowserWindow.fromWebContents(event.sender);
-    return transcribeWithGroq(projectId, paths.audio, apiKeys, model as GroqModel, win);
+    return transcribeWithGroq(projectId, paths.audio, apiKeys, model as GroqModel, win, autoRefine);
+  });
+
+  ipcMain.handle('whisper:retranscribeSegment', async (
+    _event,
+    projectId: string,
+    startMs: number,
+    endMs: number,
+    contextBefore: string,
+    contextAfter: string,
+    model: string,
+  ) => {
+    const apiKeys = (settingsStore.get('transcriptionApiKeys', []) as string[]).filter(Boolean);
+    return retranscribeSingleSegment(projectId, startMs, endMs, contextBefore, contextAfter, apiKeys, model);
+  });
+
+  ipcMain.handle('whisper:retranscribeRange', async (
+    _event,
+    projectId: string,
+    startMs: number,
+    endMs: number,
+    contextBefore: string,
+    contextAfter: string,
+    model: string,
+  ) => {
+    const apiKeys = (settingsStore.get('transcriptionApiKeys', []) as string[]).filter(Boolean);
+    return retranscribeRangeSegments(projectId, startMs, endMs, contextBefore, contextAfter, apiKeys, model);
   });
 }

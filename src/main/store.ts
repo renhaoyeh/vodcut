@@ -7,7 +7,7 @@ export interface TranscriptionProgress {
   currentChunk: number;
   numChunks: number;
   chunkRanges: Array<{ startSec: number; endSec: number }>;
-  segments: Array<{ index: number; startMs: number; endMs: number; text: string }>;
+  segments: Array<{ index: number; startMs: number; endMs: number; text: string; confidence?: number }>;
   segIdx: number;
 }
 
@@ -144,10 +144,12 @@ export function projectPaths(projectId: string) {
     dir,
     audio: path.join(dir, 'audio.wav'),
     srt: path.join(dir, 'subtitles.srt'),
+    segments: path.join(dir, 'segments.json'),
     analysis: path.join(dir, 'analysis.json'),
     analysisDir: path.join(dir, 'analysis'),
     analysisProgress: path.join(dir, 'analysis-progress.json'),
     progress: path.join(dir, 'transcription-progress.json'),
+    vocabulary: path.join(dir, 'vocabulary.json'),
   };
 }
 
@@ -259,6 +261,47 @@ export function registerStoreHandlers(): void {
         const videoName = path.basename(project.filePath, path.extname(project.filePath));
         try { fs.writeFileSync(path.join(videoDir, `${videoName}.srt`), content, 'utf8'); } catch {}
       }
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: (e as Error).message };
+    }
+  });
+
+  // Segments with confidence scores (separate file because SRT has no place for metadata).
+  ipcMain.handle('store:readSegments', (_event, projectId: string) => {
+    const paths = projectPaths(projectId);
+    try {
+      return JSON.parse(fs.readFileSync(paths.segments, 'utf8'));
+    } catch {
+      return null;
+    }
+  });
+
+  ipcMain.handle('store:saveSegments', (_event, projectId: string, segments: unknown) => {
+    const paths = projectPaths(projectId);
+    try {
+      fs.writeFileSync(paths.segments, JSON.stringify(segments, null, 2), 'utf8');
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: (e as Error).message };
+    }
+  });
+
+  // Vocabulary (per-project terms used to prime Whisper on re-transcription).
+  ipcMain.handle('store:readVocabulary', (_event, projectId: string) => {
+    const paths = projectPaths(projectId);
+    try {
+      const data = JSON.parse(fs.readFileSync(paths.vocabulary, 'utf8'));
+      return Array.isArray(data?.terms) ? data.terms : [];
+    } catch {
+      return [];
+    }
+  });
+
+  ipcMain.handle('store:saveVocabulary', (_event, projectId: string, terms: string[]) => {
+    const paths = projectPaths(projectId);
+    try {
+      fs.writeFileSync(paths.vocabulary, JSON.stringify({ terms }, null, 2), 'utf8');
       return { success: true };
     } catch (e) {
       return { success: false, error: (e as Error).message };

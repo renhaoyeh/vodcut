@@ -13,6 +13,12 @@ const ffmpegPath = path.join(process.cwd(), 'node_modules', 'ffmpeg-static', 'ff
 
 // Max chunk duration in seconds (~5 min, well under 25MB WAV limit)
 const MAX_CHUNK_SEC = 300;
+// Whisper avg_logprob threshold — segments below this are flagged/refined.
+// Keep in sync with LOW_CONFIDENCE_THRESHOLD in player.tsx.
+const LOW_CONFIDENCE_THRESHOLD = -0.8;
+// When merging low-confidence runs for auto-refinement, allow up to this many
+// good segments between runs before splitting into separate passes.
+const AUTO_REFINE_GAP_TOLERANCE = 1;
 // Silence detection parameters
 const SILENCE_THRESH_DB = -35;
 const SILENCE_MIN_DURATION = 0.5; // seconds
@@ -168,13 +174,45 @@ interface GroqSegment {
   start: number;
   end: number;
   text: string;
+  avg_logprob?: number;
 }
 
 interface GroqResponse {
   segments: GroqSegment[];
 }
 
-async function uploadToGroq(filePath: string, apiKey: string, model: string): Promise<GroqResponse> {
+/** Whisper `prompt` parameter has a 244-token limit. Keep well under it. */
+const PROMPT_MAX_CHARS = 200;
+const DEFAULT_PROMPT_SEED = '以下是繁體中文直播內容。';
+
+/**
+ * Build a Whisper prompt from the tail of previously transcribed text + optional vocabulary.
+ * This helps Whisper carry context across chunk boundaries (most errors cluster there).
+ */
+function buildChunkPrompt(priorSegments: SrtSegment[], vocabulary?: string): string {
+  const parts: string[] = [];
+  if (vocabulary && vocabulary.trim()) {
+    // Keep vocabulary section short — budget shared with rolling context.
+    parts.push(vocabulary.trim().slice(0, 80));
+  }
+
+  if (priorSegments.length === 0) {
+    parts.push(DEFAULT_PROMPT_SEED);
+  } else {
+    // Use the last N chars of prior transcription as rolling context.
+    const joined = priorSegments.map((s) => s.text).join('');
+    parts.push(joined.slice(-PROMPT_MAX_CHARS));
+  }
+
+  return parts.join(' ').slice(-PROMPT_MAX_CHARS);
+}
+
+async function uploadToGroq(
+  filePath: string,
+  apiKey: string,
+  model: string,
+  prompt?: string,
+): Promise<GroqResponse> {
   const client = getGroqClient(apiKey);
   try {
     const { data, response } = await client.audio.transcriptions
@@ -184,6 +222,7 @@ async function uploadToGroq(filePath: string, apiKey: string, model: string): Pr
         language: 'zh',
         response_format: 'verbose_json',
         temperature: 0,
+        ...(prompt ? { prompt } : {}),
       })
       .withResponse();
 
@@ -197,12 +236,168 @@ async function uploadToGroq(filePath: string, apiKey: string, model: string): Pr
   }
 }
 
+export async function retranscribeRangeSegments(
+  projectId: string,
+  startMs: number,
+  endMs: number,
+  contextBefore: string,
+  contextAfter: string,
+  apiKeys: string[],
+  model: string,
+): Promise<{ success: boolean; segments?: Array<{ startMs: number; endMs: number; text: string }>; error?: string }> {
+  const project = getProjectById(projectId);
+  if (!project) return { success: false, error: 'Project not found' };
+
+  const paths = projectPaths(projectId);
+  if (!fs.existsSync(paths.audio)) return { success: false, error: 'Audio not extracted yet.' };
+  if (apiKeys.length === 0) return { success: false, error: 'Groq API key not configured.' };
+
+  const totalSec = getAudioDuration(paths.audio);
+  const PAD_SEC = 0.3;
+  const chunkStartSec = Math.max(0, startMs / 1000 - PAD_SEC);
+  const chunkEndSec = Math.min(totalSec, endMs / 1000 + PAD_SEC);
+  const duration = chunkEndSec - chunkStartSec;
+  if (duration <= 0) return { success: false, error: 'Invalid time range.' };
+
+  let vocabulary: string | undefined;
+  try {
+    const raw = fs.readFileSync(paths.vocabulary, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed?.terms)) {
+      vocabulary = (parsed.terms as string[]).filter(Boolean).join('、');
+    }
+  } catch { /* no vocabulary */ }
+
+  const promptParts: string[] = [];
+  if (vocabulary) promptParts.push(vocabulary.slice(0, 80));
+  const ctx = `${contextBefore}${contextAfter}`.trim();
+  promptParts.push(ctx || DEFAULT_PROMPT_SEED);
+  const prompt = promptParts.join(' ').slice(-PROMPT_MAX_CHARS);
+
+  const tmpDir = app.getPath('temp');
+  const chunkPath = path.join(tmpDir, `vodcut-groq-retry-range-${projectId}-${Date.now()}.wav`);
+
+  try {
+    await extractChunk(paths.audio, chunkStartSec, duration, chunkPath);
+    const apiKey = apiKeys[0];
+    console.log(`[whisper] retranscribe range [${chunkStartSec.toFixed(1)}s-${chunkEndSec.toFixed(1)}s] prompt=${prompt.length}ch`);
+    const result = await uploadToGroq(chunkPath, apiKey, model, prompt);
+
+    const offsetMs = Math.round(chunkStartSec * 1000);
+    const out: Array<{ startMs: number; endMs: number; text: string }> = [];
+    for (const seg of result.segments) {
+      const segStartMs = Math.round(seg.start * 1000) + offsetMs;
+      const segEndMs = Math.round(seg.end * 1000) + offsetMs;
+      // Drop segments that fall entirely outside the requested range (from padding).
+      if (segEndMs <= startMs || segStartMs >= endMs) continue;
+      const text = s2tw(seg.text.trim()).trim();
+      if (!text) continue;
+      out.push({
+        startMs: Math.max(startMs, segStartMs),
+        endMs: Math.min(endMs, segEndMs),
+        text,
+      });
+    }
+
+    if (out.length === 0) return { success: false, error: 'No speech detected in range.' };
+    return { success: true, segments: out };
+  } catch (err) {
+    return { success: false, error: (err as Error).message };
+  } finally {
+    try { fs.unlinkSync(chunkPath); } catch {}
+  }
+}
+
+export async function retranscribeSingleSegment(
+  projectId: string,
+  startMs: number,
+  endMs: number,
+  contextBefore: string,
+  contextAfter: string,
+  apiKeys: string[],
+  model: string,
+): Promise<{ success: boolean; text?: string; error?: string }> {
+  const project = getProjectById(projectId);
+  if (!project) return { success: false, error: 'Project not found' };
+
+  const paths = projectPaths(projectId);
+  if (!fs.existsSync(paths.audio)) return { success: false, error: 'Audio not extracted yet.' };
+  if (apiKeys.length === 0) return { success: false, error: 'Groq API key not configured.' };
+
+  const totalSec = getAudioDuration(paths.audio);
+  const PAD_SEC = 0.3;
+  const startSec = Math.max(0, startMs / 1000 - PAD_SEC);
+  const endSec = Math.min(totalSec, endMs / 1000 + PAD_SEC);
+  const duration = endSec - startSec;
+  if (duration <= 0) return { success: false, error: 'Invalid time range.' };
+
+  let vocabulary: string | undefined;
+  try {
+    const raw = fs.readFileSync(paths.vocabulary, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed?.terms)) {
+      vocabulary = (parsed.terms as string[]).filter(Boolean).join('、');
+    }
+  } catch { /* no vocabulary */ }
+
+  const promptParts: string[] = [];
+  if (vocabulary) promptParts.push(vocabulary.slice(0, 80));
+  const ctx = `${contextBefore}${contextAfter}`.trim();
+  promptParts.push(ctx || DEFAULT_PROMPT_SEED);
+  const prompt = promptParts.join(' ').slice(-PROMPT_MAX_CHARS);
+
+  const tmpDir = app.getPath('temp');
+  const chunkPath = path.join(tmpDir, `vodcut-groq-retry-${projectId}-${Date.now()}.wav`);
+
+  try {
+    await extractChunk(paths.audio, startSec, duration, chunkPath);
+    const apiKey = apiKeys[0];
+    console.log(`[whisper] retranscribe [${startSec.toFixed(1)}s-${endSec.toFixed(1)}s] prompt=${prompt.length}ch`);
+    const result = await uploadToGroq(chunkPath, apiKey, model, prompt);
+    const joined = result.segments.map((s) => s.text.trim()).join('');
+    const text = s2tw(joined).trim();
+    return { success: true, text };
+  } catch (err) {
+    return { success: false, error: (err as Error).message };
+  } finally {
+    try { fs.unlinkSync(chunkPath); } catch {}
+  }
+}
+
+/**
+ * Group indices of low-confidence segments into contiguous runs, allowing
+ * up to `gapTolerance` good segments between runs before splitting.
+ */
+function findLowConfidenceRuns(
+  segments: SrtSegment[],
+  gapTolerance: number,
+): Array<{ lo: number; hi: number }> {
+  const flagged: number[] = [];
+  for (let i = 0; i < segments.length; i++) {
+    const c = segments[i].confidence;
+    if (typeof c === 'number' && c < LOW_CONFIDENCE_THRESHOLD) flagged.push(i);
+  }
+  if (flagged.length === 0) return [];
+
+  const runs: Array<{ lo: number; hi: number }> = [];
+  let lo = flagged[0];
+  let hi = flagged[0];
+  for (let i = 1; i < flagged.length; i++) {
+    const idx = flagged[i];
+    if (idx - hi <= gapTolerance + 1) hi = idx;
+    else { runs.push({ lo, hi }); lo = idx; hi = idx; }
+  }
+  runs.push({ lo, hi });
+  return runs;
+}
+
 export async function transcribeWithGroq(
   projectId: string,
   audioPath: string,
   apiKeys: string[],
   model: string,
   win: BrowserWindow | null,
+  autoRefineLowConfidence: boolean = true,
 ): Promise<{ success: boolean; srtPath?: string; segments?: SrtSegment[]; error?: string }> {
   const project = getProjectById(projectId);
   if (!project) return { success: false, error: 'Project not found' };
@@ -238,6 +433,16 @@ export async function transcribeWithGroq(
 
     const tmpDir = app.getPath('temp');
 
+    // Optional per-project vocabulary (A2). Read once at start; updated between retries.
+    let vocabulary: string | undefined;
+    try {
+      const raw = fs.readFileSync(paths.vocabulary, 'utf8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed?.terms)) {
+        vocabulary = (parsed.terms as string[]).filter(Boolean).join('、');
+      }
+    } catch { /* no vocabulary yet */ }
+
     while (c < numChunks) {
       const range = chunkRanges[c];
       const startSec = range.startSec;
@@ -253,8 +458,10 @@ export async function transcribeWithGroq(
       // Upload to Groq — rotate API keys across chunks
       const keyIndex = c % apiKeys.length;
       const apiKey = apiKeys[keyIndex];
-      console.log(`[whisper] chunk ${c + 1}/${numChunks} [${startSec.toFixed(1)}s-${range.endSec.toFixed(1)}s] using key #${keyIndex + 1}`);
-      const result = await uploadToGroq(chunkPath, apiKey, model);
+      // Build rolling-context prompt from prior chunks (A1)
+      const prompt = buildChunkPrompt(allSegments, vocabulary);
+      console.log(`[whisper] chunk ${c + 1}/${numChunks} [${startSec.toFixed(1)}s-${range.endSec.toFixed(1)}s] using key #${keyIndex + 1} prompt=${prompt.length}ch`);
+      const result = await uploadToGroq(chunkPath, apiKey, model, prompt);
 
       // Clean up temp file
       try { fs.unlinkSync(chunkPath); } catch {}
@@ -266,6 +473,7 @@ export async function transcribeWithGroq(
           startMs: Math.round(seg.start * 1000) + offsetMs,
           endMs: Math.round(seg.end * 1000) + offsetMs,
           text: s2tw(seg.text.trim()),
+          confidence: typeof seg.avg_logprob === 'number' ? seg.avg_logprob : undefined,
         });
       }
       c++;
@@ -274,10 +482,65 @@ export async function transcribeWithGroq(
       writeProjectFile(paths.progress, { currentChunk: c, numChunks, chunkRanges, segments: allSegments, segIdx });
     }
 
+    // Auto-refine low-confidence runs with surrounding context as prompt.
+    // This only runs once (no recursion); refined segments may still be low
+    // confidence but we keep them to avoid infinite retries.
+    if (autoRefineLowConfidence) {
+      const runs = findLowConfidenceRuns(allSegments, AUTO_REFINE_GAP_TOLERANCE);
+      if (runs.length > 0) {
+        console.log(`[whisper] auto-refining ${runs.length} low-confidence run(s)`);
+        const CONTEXT_SPAN = 3;
+        // Iterate in reverse so splice-style replacements don't invalidate earlier indices.
+        for (let r = runs.length - 1; r >= 0; r--) {
+          const { lo, hi } = runs[r];
+          const first = allSegments[lo];
+          const last = allSegments[hi];
+          if (!first || !last) continue;
+
+          const displayIdx = runs.length - r;
+          win?.webContents.send('whisper:stage', projectId, JSON.stringify({
+            key: 'player.autoRefining', current: displayIdx, total: runs.length,
+          }));
+
+          const before = allSegments
+            .slice(Math.max(0, lo - CONTEXT_SPAN), lo)
+            .map((s) => s.text).join('');
+          const after = allSegments
+            .slice(hi + 1, hi + 1 + CONTEXT_SPAN)
+            .map((s) => s.text).join('');
+
+          const refined = await retranscribeRangeSegments(
+            projectId, first.startMs, last.endMs, before, after, apiKeys, model,
+          );
+          if (!refined.success || !refined.segments || refined.segments.length === 0) {
+            console.warn(`[whisper] refine run ${displayIdx}/${runs.length} failed: ${refined.error || 'no segments'}`);
+            continue;
+          }
+
+          const replacement: SrtSegment[] = refined.segments.map((s) => ({
+            index: 0, // reindexed below
+            startMs: s.startMs,
+            endMs: s.endMs,
+            text: s.text,
+            // Clear confidence: these are the refined replacements and user-facing
+            // code treats missing confidence as "not flagged".
+            confidence: undefined as number | undefined,
+          }));
+          allSegments.splice(lo, hi - lo + 1, ...replacement);
+        }
+
+        // Renumber sequential indices after all splices.
+        for (let i = 0; i < allSegments.length; i++) allSegments[i].index = i + 1;
+      }
+    }
+
     win?.webContents.send('whisper:progress', projectId, 100);
 
     const srtContent = segmentsToSrt(allSegments);
     fs.writeFileSync(paths.srt, srtContent, 'utf8');
+
+    // Save confidence-aware segments.json (SRT can't carry metadata).
+    writeProjectFile(paths.segments, allSegments);
 
     // Also save a copy next to the video
     const videoDir = path.dirname(project.filePath);
