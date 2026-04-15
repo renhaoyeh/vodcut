@@ -408,10 +408,6 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
   const [transcribeStage, setTranscribeStage] = useState("")
   const [transcribeProgress, setTranscribeProgress] = useState(0)
   const [transcriptionModelKey, setTranscriptionModelKey] = useState("whisper-large-v3")
-  const [autoRefine, setAutoRefine] = useState(() => {
-    const saved = localStorage.getItem("autoRefineLowConfidence")
-    return saved === null ? true : saved === "1"
-  })
   const [claudeModelKey, setClaudeModelKey] = useState("sonnet")
   const [savedProgress, setSavedProgress] = useState<{ current: number; total: number } | null>(null)
 
@@ -554,6 +550,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
       }
       // Step 2: Transcribe
       setTranscribeStage(t("player.recognizing"))
+      const autoRefine = localStorage.getItem("autoRefineLowConfidence") !== "0"
       const result = await window.electronAPI.transcribe(projectId, transcriptionModelKey, autoRefine)
       if (result.success) {
         // Prefer segments.json (has confidence); fall back to SRT.
@@ -577,7 +574,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
     } finally {
       setTranscribing(false)
     }
-  }, [projectId, transcriptionModelKey, autoRefine])
+  }, [projectId, transcriptionModelKey])
 
   // Wrap claudeModelKey in a ref so handleAnalyze always sees the latest value
   const claudeModelRef = useRef(claudeModelKey)
@@ -1080,21 +1077,6 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                     ))}
                   </SelectContent>
                 </Select>
-                <label
-                  className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer select-none"
-                  title={t("player.autoRefineTooltip") as string}
-                >
-                  <Checkbox
-                    checked={autoRefine}
-                    onCheckedChange={(v) => {
-                      const next = v === true
-                      setAutoRefine(next)
-                      localStorage.setItem("autoRefineLowConfidence", next ? "1" : "0")
-                    }}
-                    className="size-3.5"
-                  />
-                  {t("player.autoRefine")}
-                </label>
                 <Button variant="outline" size="sm" onClick={handleTranscribe} disabled={!hasTranscriptionKey}
                   title={!hasTranscriptionKey ? t("player.transcribeNoKey") : undefined}
                 >

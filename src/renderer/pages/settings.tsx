@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react"
 import { useTranslation, Trans } from "react-i18next"
 
 import { Button } from "@/renderer/components/ui/button"
+import { Checkbox } from "@/renderer/components/ui/checkbox"
 import { Input } from "@/renderer/components/ui/input"
 import { Label } from "@/renderer/components/ui/label"
 import {
@@ -53,6 +54,7 @@ export function SettingsDialog() {
   const [open, setOpen] = useState(false)
   const [transcriptionKeys, setTranscriptionKeys] = useState<string[]>([])
   const [rateLimits, setRateLimits] = useState<Record<string, RateLimitInfo>>({})
+  const [autoRefine, setAutoRefine] = useState(true)
 
   useEffect(() => {
     if (!open) return
@@ -60,6 +62,7 @@ export function SettingsDialog() {
       setTranscriptionKeys(s.transcriptionApiKeys?.length ? s.transcriptionApiKeys : [""])
     })
     window.electronAPI.getRateLimits().then(setRateLimits)
+    setAutoRefine(localStorage.getItem("autoRefineLowConfidence") !== "0")
   }, [open])
 
   const updateKey = useCallback((index: number, value: string) => {
@@ -84,9 +87,10 @@ export function SettingsDialog() {
   const handleSave = useCallback(async () => {
     const cleanedKeys = transcriptionKeys.map(k => k.trim()).filter(Boolean)
     await window.electronAPI.setTranscriptionApiKeys(cleanedKeys)
+    localStorage.setItem("autoRefineLowConfidence", autoRefine ? "1" : "0")
     toast.success(t("settings.saved"), { duration: 1500 })
     setOpen(false)
-  }, [transcriptionKeys, t])
+  }, [transcriptionKeys, autoRefine, t])
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -135,6 +139,21 @@ export function SettingsDialog() {
               <Plus className="mr-1.5 size-3.5" />
               {t("settings.addKey")}
             </Button>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-sm">{t("settings.autoRefineLabel")}</Label>
+            <label className="flex items-start gap-2 rounded-md border p-2.5 cursor-pointer hover:bg-muted/40">
+              <Checkbox
+                checked={autoRefine}
+                onCheckedChange={(v) => setAutoRefine(v === true)}
+                className="mt-0.5"
+              />
+              <div className="space-y-0.5">
+                <div className="text-sm">{t("settings.autoRefineTitle")}</div>
+                <p className="text-xs text-muted-foreground">{t("settings.autoRefineHelp")}</p>
+              </div>
+            </label>
           </div>
         </div>
         <DialogFooter>

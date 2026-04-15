@@ -21,7 +21,10 @@
     "rateLimitRequests": "今日請求：剩餘 {{remaining}} / {{limit}}",
     "rateLimitTokens": "每分鐘 Token：剩餘 {{remaining}} / {{limit}}",
     "rateLimitUpdatedAt": "更新於 {{time}}",
-    "rateLimitNoData": "尚無用量資料（使用 API 後自動更新）"
+    "rateLimitNoData": "尚無用量資料（使用 API 後自動更新）",
+    "autoRefineLabel": "轉錄精修",
+    "autoRefineTitle": "自動精修低信心段落",
+    "autoRefineHelp": "轉錄完成後,自動把 Whisper 信心不足的段落用前後字幕當 prompt 重新辨識一次。會多消耗 API 額度。"
   },
   "player": {
     "transcribe": "轉錄",
@@ -34,8 +37,6 @@
     "resumeRecognizing": "繼續辨識 (已完成 {{current}}/{{total}})...",
     "recognizingProgress": "辨識中 ({{current}}/{{total}})...",
     "autoRefining": "精修低信心段落中 ({{current}}/{{total}})...",
-    "autoRefine": "自動精修",
-    "autoRefineTooltip": "辨識完後自動針對低信心段落重新辨識(會用前後字幕當 prompt)。會多消耗 API 額度。",
     "analyze": "分析大綱",
     "reanalyze": "重新分析",
     "analyzing": "分析中...",

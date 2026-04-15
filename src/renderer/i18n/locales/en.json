@@ -21,7 +21,10 @@
     "rateLimitRequests": "Daily requests: {{remaining}} / {{limit}} remaining",
     "rateLimitTokens": "Tokens per min: {{remaining}} / {{limit}} remaining",
     "rateLimitUpdatedAt": "Updated at {{time}}",
-    "rateLimitNoData": "No usage data yet (updates after API use)"
+    "rateLimitNoData": "No usage data yet (updates after API use)",
+    "autoRefineLabel": "Transcription refinement",
+    "autoRefineTitle": "Auto-refine low-confidence segments",
+    "autoRefineHelp": "After transcription completes, automatically re-transcribe segments Whisper was unsure about, using surrounding subtitles as prompt context. Uses extra API quota."
   },
   "player": {
     "transcribe": "Transcribe",
@@ -34,8 +37,6 @@
     "resumeRecognizing": "Resuming recognition ({{current}}/{{total}} done)...",
     "recognizingProgress": "Recognizing ({{current}}/{{total}})...",
     "autoRefining": "Refining low-confidence segments ({{current}}/{{total}})...",
-    "autoRefine": "Auto-refine",
-    "autoRefineTooltip": "After transcription, automatically re-transcribe low-confidence segments with surrounding context as prompt. Uses extra API quota.",
     "analyze": "Analyze outline",
     "reanalyze": "Re-analyze",
     "analyzing": "Analyzing...",
