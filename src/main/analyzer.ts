@@ -259,4 +259,85 @@ export function registerAnalyzerHandlers(): void {
       return null;
     }
   });
+
+  // A2: Vocabulary extraction from an existing SRT. Runs Claude CLI with a narrow
+  // prompt to pull out likely proper nouns / catchphrases / typo candidates.
+  ipcMain.handle('analyzer:extractVocabulary', async (_event, projectId: string) => {
+    const paths = projectPaths(projectId);
+    if (!fs.existsSync(paths.srt)) return { success: false, error: 'No SRT file' };
+
+    const srtContent = fs.readFileSync(paths.srt, 'utf8');
+    // Trim SRT to just the text (strip indices/timestamps) to reduce token usage.
+    const textOnly = srtContent
+      .split(/\n\s*\n/)
+      .map((block) => block.trim().split('\n').slice(2).join(' '))
+      .join(' ')
+      .slice(0, 30000); // cap for safety
+
+    const tmpPath = path.join(os.tmpdir(), `vodcut-vocab-${projectId}.txt`);
+    fs.writeFileSync(tmpPath, textOnly, 'utf8');
+
+    const prompt = `以下檔案是一段繁體中文直播逐字稿的純文字。
+從中挑出**最可能是專有名詞**(人名、遊戲名、角色名、品牌名、頻道名、口頭禪/招牌用語)的詞彙,
+或是**可能是錯字/音近誤認**的候選(例如「艾倫」與「愛倫」反覆交替時擇一)。
+
+規則:
+- 只回傳一個 **JSON 陣列**,陣列元素是字串,不要任何其他文字或 markdown。
+- 限制在 20 個詞彙以內,按重要性排序。
+- 保留原文中的寫法(若 Whisper 的寫法明顯錯,才修正為常見寫法)。
+- 不要放一般詞彙(「然後」「就是」「大家」等),只放**特定名字/術語/招牌詞**。
+
+檔案路徑:${tmpPath}
+請讀取這個檔案並回傳。`;
+
+    try {
+      const output = await new Promise<string>((resolve, reject) => {
+        const proc = spawn(
+          'claude',
+          ['-p', prompt, '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--allowedTools', 'Read'],
+          { stdio: ['ignore', 'pipe', 'pipe'] },
+        );
+        let full = '';
+        let stderr = '';
+        const rl = createInterface({ input: proc.stdout });
+        rl.on('line', (line: string) => {
+          if (!line.trim()) return;
+          try {
+            const evt = JSON.parse(line);
+            const deltaType = evt.event?.delta?.type ?? '';
+            if (deltaType === 'text_delta') full += evt.event.delta.text;
+            if (evt.type === 'result' && typeof evt.result === 'string') full = evt.result;
+          } catch { /* ignore */ }
+        });
+        proc.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
+        proc.on('close', (code) => {
+          if (code !== 0) reject(new Error(`claude CLI failed (${code}): ${stderr.slice(-400)}`));
+          else resolve(full.trim());
+        });
+        proc.on('error', reject);
+      });
+
+      try { fs.unlinkSync(tmpPath); } catch {}
+
+      // Extract JSON array from output.
+      const cleaned = output.replace(/```(?:json)?/g, '').trim();
+      const start = cleaned.indexOf('[');
+      const end = cleaned.lastIndexOf(']');
+      if (start === -1 || end === -1) {
+        return { success: false, error: 'No JSON array in Claude response', raw: output.slice(0, 300) };
+      }
+      const terms = JSON.parse(cleaned.slice(start, end + 1)) as unknown;
+      if (!Array.isArray(terms)) {
+        return { success: false, error: 'Claude did not return an array' };
+      }
+      const clean = (terms as unknown[])
+        .filter((x): x is string => typeof x === 'string')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      return { success: true, terms: clean };
+    } catch (err) {
+      try { fs.unlinkSync(tmpPath); } catch {}
+      return { success: false, error: (err as Error).message };
+    }
+  });
 }

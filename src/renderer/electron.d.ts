@@ -31,8 +31,24 @@ interface ElectronAPI {
   transcribe: (projectId: string, model: string) => Promise<{ success: boolean; srtPath?: string; error?: string }>;
   readSrt: (projectId: string) => Promise<string | null>;
   saveSrt: (projectId: string, content: string) => Promise<{ success: boolean; error?: string }>;
+  readSegments: (projectId: string) => Promise<Array<{ index: number; startMs: number; endMs: number; text: string; confidence?: number }> | null>;
+  saveSegments: (projectId: string, segments: unknown) => Promise<{ success: boolean; error?: string }>;
   onWhisperProgress: (callback: (projectId: string, percent: number) => void) => () => void;
   onWhisperStage: (callback: (projectId: string, stage: string) => void) => () => void;
+
+  // Clip export (C1/C2)
+  exportClip: (
+    projectId: string,
+    clip: { title: string; startMs: number; endMs: number },
+    options: { burnSubtitles: boolean; precise: boolean },
+  ) => Promise<{ success: boolean; outputPath?: string; error?: string }>;
+  revealInFolder: (filePath: string) => Promise<{ success: boolean; error?: string }>;
+  onExportProgress: (callback: (projectId: string, clipKey: string, percent: number) => void) => () => void;
+
+  // Vocabulary extraction (A2)
+  extractVocabulary: (projectId: string) => Promise<{ success: boolean; terms?: string[]; error?: string }>;
+  saveVocabulary: (projectId: string, terms: string[]) => Promise<{ success: boolean; error?: string }>;
+  readVocabulary: (projectId: string) => Promise<string[]>;
 }
 
 declare global {

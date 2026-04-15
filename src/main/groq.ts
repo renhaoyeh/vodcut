@@ -168,13 +168,45 @@ interface GroqSegment {
   start: number;
   end: number;
   text: string;
+  avg_logprob?: number;
 }
 
 interface GroqResponse {
   segments: GroqSegment[];
 }
 
-async function uploadToGroq(filePath: string, apiKey: string, model: string): Promise<GroqResponse> {
+/** Whisper `prompt` parameter has a 244-token limit. Keep well under it. */
+const PROMPT_MAX_CHARS = 200;
+const DEFAULT_PROMPT_SEED = '以下是繁體中文直播內容。';
+
+/**
+ * Build a Whisper prompt from the tail of previously transcribed text + optional vocabulary.
+ * This helps Whisper carry context across chunk boundaries (most errors cluster there).
+ */
+function buildChunkPrompt(priorSegments: SrtSegment[], vocabulary?: string): string {
+  const parts: string[] = [];
+  if (vocabulary && vocabulary.trim()) {
+    // Keep vocabulary section short — budget shared with rolling context.
+    parts.push(vocabulary.trim().slice(0, 80));
+  }
+
+  if (priorSegments.length === 0) {
+    parts.push(DEFAULT_PROMPT_SEED);
+  } else {
+    // Use the last N chars of prior transcription as rolling context.
+    const joined = priorSegments.map((s) => s.text).join('');
+    parts.push(joined.slice(-PROMPT_MAX_CHARS));
+  }
+
+  return parts.join(' ').slice(-PROMPT_MAX_CHARS);
+}
+
+async function uploadToGroq(
+  filePath: string,
+  apiKey: string,
+  model: string,
+  prompt?: string,
+): Promise<GroqResponse> {
   const client = getGroqClient(apiKey);
   try {
     const { data, response } = await client.audio.transcriptions
@@ -184,6 +216,7 @@ async function uploadToGroq(filePath: string, apiKey: string, model: string): Pr
         language: 'zh',
         response_format: 'verbose_json',
         temperature: 0,
+        ...(prompt ? { prompt } : {}),
       })
       .withResponse();
 
@@ -238,6 +271,16 @@ export async function transcribeWithGroq(
 
     const tmpDir = app.getPath('temp');
 
+    // Optional per-project vocabulary (A2). Read once at start; updated between retries.
+    let vocabulary: string | undefined;
+    try {
+      const raw = fs.readFileSync(paths.vocabulary, 'utf8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed?.terms)) {
+        vocabulary = (parsed.terms as string[]).filter(Boolean).join('、');
+      }
+    } catch { /* no vocabulary yet */ }
+
     while (c < numChunks) {
       const range = chunkRanges[c];
       const startSec = range.startSec;
@@ -253,8 +296,10 @@ export async function transcribeWithGroq(
       // Upload to Groq — rotate API keys across chunks
       const keyIndex = c % apiKeys.length;
       const apiKey = apiKeys[keyIndex];
-      console.log(`[whisper] chunk ${c + 1}/${numChunks} [${startSec.toFixed(1)}s-${range.endSec.toFixed(1)}s] using key #${keyIndex + 1}`);
-      const result = await uploadToGroq(chunkPath, apiKey, model);
+      // Build rolling-context prompt from prior chunks (A1)
+      const prompt = buildChunkPrompt(allSegments, vocabulary);
+      console.log(`[whisper] chunk ${c + 1}/${numChunks} [${startSec.toFixed(1)}s-${range.endSec.toFixed(1)}s] using key #${keyIndex + 1} prompt=${prompt.length}ch`);
+      const result = await uploadToGroq(chunkPath, apiKey, model, prompt);
 
       // Clean up temp file
       try { fs.unlinkSync(chunkPath); } catch {}
@@ -266,6 +311,7 @@ export async function transcribeWithGroq(
           startMs: Math.round(seg.start * 1000) + offsetMs,
           endMs: Math.round(seg.end * 1000) + offsetMs,
           text: s2tw(seg.text.trim()),
+          confidence: typeof seg.avg_logprob === 'number' ? seg.avg_logprob : undefined,
         });
       }
       c++;
@@ -278,6 +324,9 @@ export async function transcribeWithGroq(
 
     const srtContent = segmentsToSrt(allSegments);
     fs.writeFileSync(paths.srt, srtContent, 'utf8');
+
+    // Save confidence-aware segments.json (SRT can't carry metadata).
+    writeProjectFile(paths.segments, allSegments);
 
     // Also save a copy next to the video
     const videoDir = path.dirname(project.filePath);

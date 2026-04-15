@@ -1,14 +1,23 @@
 import React, { useEffect, useRef, useState, useCallback } from "react"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { useTranslation } from "react-i18next"
-import { ArrowLeft, Maximize, Minimize, Pause, Play, Loader2, Sparkles, ListVideo, Scissors, Volume2, VolumeX, Mic, FileText, ArrowDown } from "lucide-react"
+import { ArrowLeft, Maximize, Minimize, Pause, Play, Loader2, Sparkles, ListVideo, Scissors, Volume2, VolumeX, Mic, FileText, ArrowDown, Pencil, Download, Copy, Wand2, Split, Merge, AlertTriangle } from "lucide-react"
 import { Button } from "@/renderer/components/ui/button"
 import { Separator } from "@/renderer/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/renderer/components/ui/select"
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/renderer/components/ui/resizable"
 import { ScrollArea } from "@/renderer/components/ui/scroll-area"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/renderer/components/ui/dialog"
+import { Checkbox } from "@/renderer/components/ui/checkbox"
+import { Label } from "@/renderer/components/ui/label"
 import type { AnalysisData } from "@/main/store"
 import { toast } from "sonner"
+
+/**
+ * Whisper `avg_logprob` threshold: anything below this we flag as low-confidence.
+ * logprob is <= 0; typical good values are > -0.5. -0.8 is quite low.
+ */
+const LOW_CONFIDENCE_THRESHOLD = -0.8
 
 const TRANSCRIPTION_MODELS = [
   { value: "whisper-large-v3", label: "Whisper V3" },
@@ -28,6 +37,8 @@ interface Subtitle {
   startMs: number
   endMs: number
   text: string
+  /** Whisper `avg_logprob` (<= 0, higher is more confident) when available. */
+  confidence?: number
 }
 
 function parseSrt(srt: string): Subtitle[] {
@@ -57,6 +68,39 @@ function formatTime(seconds: number): string {
   const s = Math.floor(seconds % 60)
   if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
   return `${m}:${String(s).padStart(2, "0")}`
+}
+
+/** Format ms as H:MM:SS (YouTube chapter format, no leading zero on hours). */
+function formatYouTubeTime(ms: number): string {
+  const s = Math.floor(ms / 1000)
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const sec = s % 60
+  const mm = String(m).padStart(2, "0")
+  const ss = String(sec).padStart(2, "0")
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`
+}
+
+/** Format ms as SRT timestamp: HH:MM:SS,mmm */
+function formatSrtTimestamp(ms: number): string {
+  const h = Math.floor(ms / 3600000)
+  const m = Math.floor((ms % 3600000) / 60000)
+  const s = Math.floor((ms % 60000) / 1000)
+  const milli = Math.round(ms % 1000)
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")},${String(milli).padStart(3, "0")}`
+}
+
+/** Convert Subtitle[] back to SRT text. */
+function subtitlesToSrt(subs: Subtitle[]): string {
+  return subs
+    .map((s, i) => `${i + 1}\n${formatSrtTimestamp(s.startMs)} --> ${formatSrtTimestamp(s.endMs)}\n${s.text}\n`)
+    .join("\n")
+}
+
+/** A filename-safe slug for clip exports. */
+function slugify(s: string, fallback: string): string {
+  const cleaned = s.replace(/[\\/:*?"<>|\n\r\t]+/g, "").trim().slice(0, 60)
+  return cleaned || fallback
 }
 
 // ── Playback Controls (from openscreen PlaybackControls.tsx) ─
@@ -383,6 +427,22 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
   const activeClipRef = useRef(activeClip)
   activeClipRef.current = activeClip
 
+  // Subtitle editor state (A4)
+  const [editingIdx, setEditingIdx] = useState<number | null>(null)
+  const [editText, setEditText] = useState("")
+  const editInputRef = useRef<HTMLInputElement>(null)
+
+  // Clip export state (C2)
+  const [exportProgress, setExportProgress] = useState<Record<string, number>>({})
+  const [exportBurnSubs, setExportBurnSubs] = useState(false)
+  const [exportPrecise, setExportPrecise] = useState(true)
+
+  // Vocabulary / enhance transcription (A2)
+  const [vocabOpen, setVocabOpen] = useState(false)
+  const [vocabTerms, setVocabTerms] = useState<Array<{ term: string; selected: boolean }>>([])
+  const [vocabExtracting, setVocabExtracting] = useState(false)
+  const [vocabCustom, setVocabCustom] = useState("")
+
   const hideTimerRef = useRef<ReturnType<typeof setTimeout>>(null)
   const subtitlesRef = useRef<Subtitle[]>([])
   const [srtAutoScroll, setSrtAutoScroll] = useState(true)
@@ -404,15 +464,25 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
     })
   }, [])
 
-  // Load SRT + existing analysis
+  // Load SRT + existing analysis.
+  // Prefer segments.json (has confidence scores); fall back to parsed SRT for legacy projects.
   useEffect(() => {
-    window.electronAPI.readSrt(projectId).then((srt) => {
+    (async () => {
+      const segs = await window.electronAPI.readSegments(projectId)
+      if (Array.isArray(segs) && segs.length > 0) {
+        setSubtitles(segs.map((s: any) => ({
+          startMs: s.startMs, endMs: s.endMs, text: s.text,
+          confidence: typeof s.confidence === "number" ? s.confidence : undefined,
+        })))
+        setHasSrt(true)
+        return
+      }
+      const srt = await window.electronAPI.readSrt(projectId)
       if (srt) {
         setSubtitles(parseSrt(srt))
         setHasSrt(true)
-        
       }
-    })
+    })()
     window.electronAPI.listAnalysisModels(projectId).then((models) => {
       setSavedModels(models)
       if (models.length > 0) {
@@ -477,10 +547,18 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
       setTranscribeStage(t("player.recognizing"))
       const result = await window.electronAPI.transcribe(projectId, transcriptionModelKey)
       if (result.success) {
-        const srt = await window.electronAPI.readSrt(projectId)
-        if (srt) setSubtitles(parseSrt(srt))
+        // Prefer segments.json (has confidence); fall back to SRT.
+        const segs = await window.electronAPI.readSegments(projectId)
+        if (Array.isArray(segs) && segs.length > 0) {
+          setSubtitles(segs.map((s: any) => ({
+            startMs: s.startMs, endMs: s.endMs, text: s.text,
+            confidence: typeof s.confidence === "number" ? s.confidence : undefined,
+          })))
+        } else {
+          const srt = await window.electronAPI.readSrt(projectId)
+          if (srt) setSubtitles(parseSrt(srt))
+        }
         setHasSrt(true)
-        
         setPanelTab("srt")
       } else {
         toast.error(result.error ?? "Transcription failed")
@@ -678,6 +756,167 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
   const clearClip = useCallback(() => {
     setActiveClip(null)
   }, [])
+
+  // ── Subtitle editing (A4) ─────────────────────────────────
+  const persistSubtitles = useCallback(async (next: Subtitle[]) => {
+    setSubtitles(next)
+    const segsToSave = next.map((s, i) => ({
+      index: i + 1,
+      startMs: s.startMs, endMs: s.endMs, text: s.text,
+      confidence: s.confidence,
+    }))
+    await window.electronAPI.saveSegments(projectId, segsToSave)
+    await window.electronAPI.saveSrt(projectId, subtitlesToSrt(next))
+  }, [projectId])
+
+  const startEditSubtitle = useCallback((idx: number) => {
+    setEditingIdx(idx)
+    setEditText(subtitlesRef.current[idx]?.text ?? "")
+    setTimeout(() => editInputRef.current?.focus(), 0)
+  }, [])
+
+  const commitEditSubtitle = useCallback(async () => {
+    if (editingIdx == null) return
+    const next = [...subtitlesRef.current]
+    const cur = next[editingIdx]
+    if (!cur) { setEditingIdx(null); return }
+    // User-edited text is implicitly high-confidence — clear the flag.
+    next[editingIdx] = { ...cur, text: editText, confidence: undefined }
+    await persistSubtitles(next)
+    setEditingIdx(null)
+  }, [editingIdx, editText, persistSubtitles])
+
+  const cancelEditSubtitle = useCallback(() => {
+    setEditingIdx(null)
+    setEditText("")
+  }, [])
+
+  const mergeWithNext = useCallback(async (idx: number) => {
+    const cur = subtitlesRef.current
+    if (idx < 0 || idx >= cur.length - 1) return
+    const merged: Subtitle = {
+      startMs: cur[idx].startMs,
+      endMs: cur[idx + 1].endMs,
+      text: `${cur[idx].text}${cur[idx].text.endsWith(" ") ? "" : ""}${cur[idx + 1].text}`.trim(),
+      confidence: undefined,
+    }
+    const next = [...cur.slice(0, idx), merged, ...cur.slice(idx + 2)]
+    await persistSubtitles(next)
+  }, [persistSubtitles])
+
+  const splitSubtitle = useCallback(async (idx: number) => {
+    const cur = subtitlesRef.current
+    const target = cur[idx]
+    if (!target || target.text.length < 2) return
+    // Split text at middle char; split time proportionally.
+    const mid = Math.floor(target.text.length / 2)
+    const leftText = target.text.slice(0, mid).trim()
+    const rightText = target.text.slice(mid).trim()
+    if (!leftText || !rightText) return
+    const midMs = target.startMs + Math.round((target.endMs - target.startMs) * (mid / target.text.length))
+    const left: Subtitle = { startMs: target.startMs, endMs: midMs, text: leftText, confidence: undefined }
+    const right: Subtitle = { startMs: midMs, endMs: target.endMs, text: rightText, confidence: undefined }
+    const next = [...cur.slice(0, idx), left, right, ...cur.slice(idx + 1)]
+    await persistSubtitles(next)
+  }, [persistSubtitles])
+
+  // ── YouTube chapters (B1) ─────────────────────────────────
+  const copyYouTubeChapters = useCallback(async () => {
+    if (!analysis || analysis.sections.length === 0) return
+    // YouTube requires the first chapter to be 00:00.
+    const lines: string[] = []
+    const sections = [...analysis.sections].sort((a, b) => a.startMs - b.startMs)
+    lines.push(`00:00 ${sections[0].title}`)
+    for (let i = 1; i < sections.length; i++) {
+      lines.push(`${formatYouTubeTime(sections[i].startMs)} ${sections[i].title}`)
+    }
+    const text = lines.join("\n")
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.success(t("player.copiedYouTubeChapters"))
+    } catch {
+      toast.error("Copy failed")
+    }
+  }, [analysis, t])
+
+  // ── Clip export (C1/C2) ────────────────────────────────────
+  useEffect(() => {
+    const cleanup = window.electronAPI.onExportProgress((pid, clipKey, percent) => {
+      if (pid !== projectId) return
+      setExportProgress((prev) => ({ ...prev, [clipKey]: percent }))
+    })
+    return cleanup
+  }, [projectId])
+
+  const exportClip = useCallback(async (clip: { title: string; startMs: number; endMs: number }) => {
+    const key = `${clip.startMs}-${clip.endMs}`
+    setExportProgress((prev) => ({ ...prev, [key]: 0 }))
+    try {
+      const result = await window.electronAPI.exportClip(projectId, clip, {
+        burnSubtitles: exportBurnSubs,
+        precise: exportPrecise || exportBurnSubs,
+      })
+      if (result.success && result.outputPath) {
+        toast.success(t("player.clipExported", { path: result.outputPath }), {
+          action: {
+            label: t("player.revealInFolder"),
+            onClick: () => window.electronAPI.revealInFolder(result.outputPath),
+          },
+        })
+      } else {
+        toast.error(result.error ?? "Export failed")
+      }
+    } catch (err) {
+      toast.error(String(err))
+    } finally {
+      setExportProgress((prev) => {
+        const { [key]: _, ...rest } = prev
+        return rest
+      })
+    }
+  }, [projectId, t, exportBurnSubs, exportPrecise])
+
+  // ── Enhance transcription: vocabulary extraction (A2) ─────
+  const openVocabDialog = useCallback(async () => {
+    setVocabOpen(true)
+    setVocabExtracting(true)
+    try {
+      const existing = await window.electronAPI.readVocabulary(projectId)
+      // Kick off fresh extraction from current SRT.
+      const result = await window.electronAPI.extractVocabulary(projectId)
+      setVocabExtracting(false)
+      if (result.success && Array.isArray(result.terms)) {
+        const existingSet = new Set<string>(existing)
+        const merged: Array<{ term: string; selected: boolean }> = []
+        for (const t of result.terms) {
+          merged.push({ term: t, selected: existingSet.has(t) })
+        }
+        // Append any existing terms not re-discovered.
+        for (const ex of existing) {
+          if (!result.terms.includes(ex)) {
+            merged.push({ term: ex, selected: true })
+          }
+        }
+        setVocabTerms(merged)
+      } else {
+        // Extraction failed but still allow manual editing.
+        setVocabTerms(existing.map((term: string) => ({ term, selected: true })))
+        if (result.error) toast.error(result.error)
+      }
+    } catch (err) {
+      setVocabExtracting(false)
+      toast.error(String(err))
+    }
+  }, [projectId])
+
+  const saveVocabAndReTranscribe = useCallback(async () => {
+    const chosen = vocabTerms.filter((v) => v.selected).map((v) => v.term)
+    const custom = vocabCustom.split(/[、,\s\n]+/).map((s) => s.trim()).filter(Boolean)
+    const all = Array.from(new Set([...chosen, ...custom]))
+    await window.electronAPI.saveVocabulary(projectId, all)
+    setVocabOpen(false)
+    toast.info(t("player.vocabSavedPrompt"))
+  }, [projectId, vocabTerms, vocabCustom, t])
 
   const formatMs = (ms: number) => {
     const s = Math.floor(ms / 1000)
@@ -879,31 +1118,97 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
             </div>
 
             {panelTab === "srt" && (
-              <div className="relative flex-1 overflow-hidden">
+              <div className="relative flex flex-1 flex-col overflow-hidden">
+                <div className="flex shrink-0 items-center gap-1 border-b px-2 py-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-[11px]"
+                    onClick={openVocabDialog}
+                    disabled={!hasSrt}
+                    title={t("player.enhanceTranscriptTooltip") as string}
+                  >
+                    <Wand2 className="mr-1 size-3.5" />
+                    {t("player.enhanceTranscript")}
+                  </Button>
+                </div>
                 <div
                   ref={srtScrollRef}
-                  className="h-full overflow-y-auto"
+                  className="relative flex-1 overflow-y-auto"
                   onWheel={() => { if (srtAutoScrollRef.current) { srtAutoScrollRef.current = false; setSrtAutoScroll(false) } }}
                 >
                   <div style={{ height: srtVirtualizer.getTotalSize(), position: "relative" }}>
                     {srtVirtualizer.getVirtualItems().map((vItem) => {
                       const sub = subtitles[vItem.index]
                       const active = vItem.index === activeSrtIdx
+                      const isEditing = editingIdx === vItem.index
+                      const lowConfidence = typeof sub.confidence === "number" && sub.confidence < LOW_CONFIDENCE_THRESHOLD
                       return (
                         <div
                           key={vItem.index}
                           style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${vItem.start}px)` }}
                           ref={srtVirtualizer.measureElement}
                           data-index={vItem.index}
-                          className={`border-b px-3 py-2 transition-colors hover:bg-accent cursor-pointer ${
-                            active ? "bg-accent/50 border-l-2 border-l-primary" : ""
-                          }`}
-                          onClick={() => { setActiveClip(null); seekToMs(sub.startMs) }}
+                          className={`group border-b px-3 py-2 transition-colors cursor-pointer ${
+                            active ? "bg-accent/50 border-l-2 border-l-primary" : "hover:bg-accent"
+                          } ${lowConfidence ? "bg-orange-500/10 border-l-2 border-l-orange-500/60" : ""}`}
+                          onClick={() => {
+                            if (isEditing) return
+                            setActiveClip(null); seekToMs(sub.startMs)
+                          }}
                         >
-                          <span className="text-[10px] tabular-nums text-muted-foreground">
-                            {formatMs(sub.startMs)} – {formatMs(sub.endMs)}
-                          </span>
-                          <p className="mt-0.5 text-sm">{sub.text}</p>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] tabular-nums text-muted-foreground">
+                              {formatMs(sub.startMs)} – {formatMs(sub.endMs)}
+                            </span>
+                            {lowConfidence && (
+                              <AlertTriangle className="size-3 text-orange-500" aria-label={t("player.lowConfidence") as string} />
+                            )}
+                            <div className="ml-auto flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                              <button
+                                type="button"
+                                className="rounded p-1 text-muted-foreground hover:bg-background hover:text-foreground"
+                                title={t("player.editSubtitle") as string}
+                                onClick={(e) => { e.stopPropagation(); startEditSubtitle(vItem.index) }}
+                              >
+                                <Pencil className="size-3" />
+                              </button>
+                              <button
+                                type="button"
+                                className="rounded p-1 text-muted-foreground hover:bg-background hover:text-foreground"
+                                title={t("player.splitSubtitle") as string}
+                                onClick={(e) => { e.stopPropagation(); splitSubtitle(vItem.index) }}
+                              >
+                                <Split className="size-3" />
+                              </button>
+                              {vItem.index < subtitles.length - 1 && (
+                                <button
+                                  type="button"
+                                  className="rounded p-1 text-muted-foreground hover:bg-background hover:text-foreground"
+                                  title={t("player.mergeSubtitle") as string}
+                                  onClick={(e) => { e.stopPropagation(); mergeWithNext(vItem.index) }}
+                                >
+                                  <Merge className="size-3" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          {isEditing ? (
+                            <input
+                              ref={editInputRef}
+                              value={editText}
+                              onChange={(e) => setEditText(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") { e.preventDefault(); commitEditSubtitle() }
+                                else if (e.key === "Escape") { e.preventDefault(); cancelEditSubtitle() }
+                              }}
+                              onBlur={commitEditSubtitle}
+                              onClick={(e) => e.stopPropagation()}
+                              className="mt-0.5 w-full rounded border border-primary bg-background px-1 py-0.5 text-sm outline-none"
+                            />
+                          ) : (
+                            <p className="mt-0.5 text-sm">{sub.text}</p>
+                          )}
                         </div>
                       )
                     })}
@@ -956,6 +1261,16 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                     <div className="flex items-center gap-1 border-b px-3 py-1.5">
                       <ListVideo className="size-3.5 text-muted-foreground" />
                       <span className="text-xs font-medium text-muted-foreground">{t("player.tabSections", { count: analysis.sections.length })}</span>
+                      <button
+                        type="button"
+                        className="ml-auto flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                        title={t("player.copyYouTubeChaptersTooltip") as string}
+                        onClick={copyYouTubeChapters}
+                        disabled={analysis.sections.length === 0}
+                      >
+                        <Copy className="size-3" />
+                        {t("player.copyYouTubeChapters")}
+                      </button>
                     </div>
                     <ScrollArea className="flex-1">
                       {analysis.sections.map((sec, i) => {
@@ -987,35 +1302,70 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                     <div className="flex items-center gap-1 border-b px-3 py-1.5">
                       <Scissors className="size-3.5 text-muted-foreground" />
                       <span className="text-xs font-medium text-muted-foreground">{t("player.tabClips", { count: analysis.clips.length })}</span>
+                      <div className="ml-auto flex items-center gap-2">
+                        <label
+                          className="flex items-center gap-1 text-[10px] text-muted-foreground"
+                          title={t("player.exportBurnSubtitlesTooltip") as string}
+                        >
+                          <Checkbox
+                            checked={exportBurnSubs}
+                            onCheckedChange={(v) => setExportBurnSubs(v === true)}
+                            className="size-3"
+                          />
+                          {t("player.exportBurnSubtitles")}
+                        </label>
+                      </div>
                     </div>
                     <ScrollArea className="flex-1">
                       {analysis.clips.map((clip, i) => {
                         const isActive = activeClip?.startMs === clip.startMs && activeClip?.endMs === clip.endMs
+                        const exportKey = `${clip.startMs}-${clip.endMs}`
+                        const exporting = exportProgress[exportKey] !== undefined
                         return (
-                          <button
+                          <div
                             key={i}
-                            className={`w-full border-b px-3 py-2.5 text-left transition-colors hover:bg-accent ${
+                            className={`group w-full border-b px-3 py-2.5 text-left transition-colors hover:bg-accent ${
                               isActive ? "bg-accent/50 border-l-2 border-l-primary" : ""
                             }`}
-                            onClick={() => {
-                              if (isActive) {
-                                clearClip()
-                              } else {
-                                playClip(clip.startMs, clip.endMs)
-                              }
-                            }}
                           >
-                            <div className="flex items-baseline gap-2">
-                              <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
-                                {formatMs(clip.startMs)} – {formatMs(clip.endMs)}
-                              </span>
-                              {isActive && (
-                                <span className="text-[10px] text-primary">{t("player.playingClickToCancel")}</span>
-                              )}
+                            <div
+                              className="cursor-pointer"
+                              onClick={() => {
+                                if (isActive) clearClip()
+                                else playClip(clip.startMs, clip.endMs)
+                              }}
+                            >
+                              <div className="flex items-baseline gap-2">
+                                <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+                                  {formatMs(clip.startMs)} – {formatMs(clip.endMs)}
+                                </span>
+                                {isActive && (
+                                  <span className="text-[10px] text-primary">{t("player.playingClickToCancel")}</span>
+                                )}
+                                <button
+                                  type="button"
+                                  className="ml-auto flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground opacity-0 transition-opacity hover:bg-background hover:text-foreground group-hover:opacity-100 disabled:opacity-50"
+                                  title={t("player.exportClipTooltip") as string}
+                                  disabled={exporting}
+                                  onClick={(e) => { e.stopPropagation(); exportClip(clip) }}
+                                >
+                                  {exporting ? (
+                                    <>
+                                      <Loader2 className="size-3 animate-spin" />
+                                      {exportProgress[exportKey]}%
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Download className="size-3" />
+                                      {t("player.exportClip")}
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                              <p className="mt-0.5 text-sm font-medium">{clip.title}</p>
+                              <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{clip.reason}</p>
                             </div>
-                            <p className="mt-0.5 text-sm font-medium">{clip.title}</p>
-                            <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{clip.reason}</p>
-                          </button>
+                          </div>
                         )
                       })}
                     </ScrollArea>
@@ -1027,6 +1377,63 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>
+
+      {/* Vocabulary / Enhance transcription dialog (A2) */}
+      <Dialog open={vocabOpen} onOpenChange={setVocabOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("player.enhanceTranscript")}</DialogTitle>
+            <DialogDescription>{t("player.enhanceTranscriptDesc")}</DialogDescription>
+          </DialogHeader>
+          {vocabExtracting ? (
+            <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" />
+              {t("player.extractingVocabulary")}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              <div className="max-h-64 overflow-y-auto rounded border px-2 py-1">
+                {vocabTerms.length === 0 ? (
+                  <div className="py-4 text-center text-xs text-muted-foreground">
+                    {t("player.noVocabularyFound")}
+                  </div>
+                ) : (
+                  vocabTerms.map((v, i) => (
+                    <label key={i} className="flex cursor-pointer items-center gap-2 py-1 text-sm">
+                      <Checkbox
+                        checked={v.selected}
+                        onCheckedChange={(checked) => {
+                          setVocabTerms((prev) => prev.map((p, pi) => pi === i ? { ...p, selected: checked === true } : p))
+                        }}
+                      />
+                      <span className={v.selected ? "" : "text-muted-foreground"}>{v.term}</span>
+                    </label>
+                  ))
+                )}
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">{t("player.additionalTerms")}</Label>
+                <textarea
+                  value={vocabCustom}
+                  onChange={(e) => setVocabCustom(e.target.value)}
+                  placeholder={t("player.additionalTermsPlaceholder") as string}
+                  className="mt-1 w-full rounded border bg-background px-2 py-1 text-sm outline-none focus:border-primary"
+                  rows={2}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setVocabOpen(false)}>
+              {t("settings.cancel")}
+            </Button>
+            <Button size="sm" onClick={saveVocabAndReTranscribe} disabled={vocabExtracting}>
+              <Wand2 className="mr-1 size-3.5" />
+              {t("player.saveVocabulary")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

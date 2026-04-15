@@ -9,6 +9,8 @@ export interface SrtSegment {
   startMs: number;
   endMs: number;
   text: string;
+  /** Whisper `avg_logprob` (roughly -inf..0; higher is more confident). */
+  confidence?: number;
 }
 
 function formatTimestamp(ms: number): string {
