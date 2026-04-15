@@ -29,6 +29,22 @@ interface ElectronAPI {
   getRateLimits: () => Promise<Record<string, RateLimitInfo>>;
   getTranscriptionProgress: (projectId: string) => Promise<TranscriptionProgress | null>;
   transcribe: (projectId: string, model: string) => Promise<{ success: boolean; srtPath?: string; error?: string }>;
+  retranscribeSegment: (
+    projectId: string,
+    startMs: number,
+    endMs: number,
+    contextBefore: string,
+    contextAfter: string,
+    model: string,
+  ) => Promise<{ success: boolean; text?: string; error?: string }>;
+  retranscribeRange: (
+    projectId: string,
+    startMs: number,
+    endMs: number,
+    contextBefore: string,
+    contextAfter: string,
+    model: string,
+  ) => Promise<{ success: boolean; segments?: Array<{ startMs: number; endMs: number; text: string }>; error?: string }>;
   readSrt: (projectId: string) => Promise<string | null>;
   saveSrt: (projectId: string, content: string) => Promise<{ success: boolean; error?: string }>;
   readSegments: (projectId: string) => Promise<Array<{ index: number; startMs: number; endMs: number; text: string; confidence?: number }> | null>;

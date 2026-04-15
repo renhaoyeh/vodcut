@@ -2,7 +2,7 @@ import { ipcMain, BrowserWindow } from 'electron';
 import fs from 'fs';
 import { getProjectById, settingsStore, projectPaths, readProjectFile, rateLimitsStore } from './store';
 import type { GroqModel, TranscriptionProgress } from './store';
-import { transcribeWithGroq } from './groq';
+import { transcribeWithGroq, retranscribeSingleSegment, retranscribeRangeSegments } from './groq';
 
 export interface SrtSegment {
   index: number;
@@ -74,5 +74,31 @@ export function registerWhisperHandlers(): void {
     }
     const win = BrowserWindow.fromWebContents(event.sender);
     return transcribeWithGroq(projectId, paths.audio, apiKeys, model as GroqModel, win);
+  });
+
+  ipcMain.handle('whisper:retranscribeSegment', async (
+    _event,
+    projectId: string,
+    startMs: number,
+    endMs: number,
+    contextBefore: string,
+    contextAfter: string,
+    model: string,
+  ) => {
+    const apiKeys = (settingsStore.get('transcriptionApiKeys', []) as string[]).filter(Boolean);
+    return retranscribeSingleSegment(projectId, startMs, endMs, contextBefore, contextAfter, apiKeys, model);
+  });
+
+  ipcMain.handle('whisper:retranscribeRange', async (
+    _event,
+    projectId: string,
+    startMs: number,
+    endMs: number,
+    contextBefore: string,
+    contextAfter: string,
+    model: string,
+  ) => {
+    const apiKeys = (settingsStore.get('transcriptionApiKeys', []) as string[]).filter(Boolean);
+    return retranscribeRangeSegments(projectId, startMs, endMs, contextBefore, contextAfter, apiKeys, model);
   });
 }

@@ -230,6 +230,134 @@ async function uploadToGroq(
   }
 }
 
+export async function retranscribeRangeSegments(
+  projectId: string,
+  startMs: number,
+  endMs: number,
+  contextBefore: string,
+  contextAfter: string,
+  apiKeys: string[],
+  model: string,
+): Promise<{ success: boolean; segments?: Array<{ startMs: number; endMs: number; text: string }>; error?: string }> {
+  const project = getProjectById(projectId);
+  if (!project) return { success: false, error: 'Project not found' };
+
+  const paths = projectPaths(projectId);
+  if (!fs.existsSync(paths.audio)) return { success: false, error: 'Audio not extracted yet.' };
+  if (apiKeys.length === 0) return { success: false, error: 'Groq API key not configured.' };
+
+  const totalSec = getAudioDuration(paths.audio);
+  const PAD_SEC = 0.3;
+  const chunkStartSec = Math.max(0, startMs / 1000 - PAD_SEC);
+  const chunkEndSec = Math.min(totalSec, endMs / 1000 + PAD_SEC);
+  const duration = chunkEndSec - chunkStartSec;
+  if (duration <= 0) return { success: false, error: 'Invalid time range.' };
+
+  let vocabulary: string | undefined;
+  try {
+    const raw = fs.readFileSync(paths.vocabulary, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed?.terms)) {
+      vocabulary = (parsed.terms as string[]).filter(Boolean).join('、');
+    }
+  } catch { /* no vocabulary */ }
+
+  const promptParts: string[] = [];
+  if (vocabulary) promptParts.push(vocabulary.slice(0, 80));
+  const ctx = `${contextBefore}${contextAfter}`.trim();
+  promptParts.push(ctx || DEFAULT_PROMPT_SEED);
+  const prompt = promptParts.join(' ').slice(-PROMPT_MAX_CHARS);
+
+  const tmpDir = app.getPath('temp');
+  const chunkPath = path.join(tmpDir, `vodcut-groq-retry-range-${projectId}-${Date.now()}.wav`);
+
+  try {
+    await extractChunk(paths.audio, chunkStartSec, duration, chunkPath);
+    const apiKey = apiKeys[0];
+    console.log(`[whisper] retranscribe range [${chunkStartSec.toFixed(1)}s-${chunkEndSec.toFixed(1)}s] prompt=${prompt.length}ch`);
+    const result = await uploadToGroq(chunkPath, apiKey, model, prompt);
+
+    const offsetMs = Math.round(chunkStartSec * 1000);
+    const out: Array<{ startMs: number; endMs: number; text: string }> = [];
+    for (const seg of result.segments) {
+      const segStartMs = Math.round(seg.start * 1000) + offsetMs;
+      const segEndMs = Math.round(seg.end * 1000) + offsetMs;
+      // Drop segments that fall entirely outside the requested range (from padding).
+      if (segEndMs <= startMs || segStartMs >= endMs) continue;
+      const text = s2tw(seg.text.trim()).trim();
+      if (!text) continue;
+      out.push({
+        startMs: Math.max(startMs, segStartMs),
+        endMs: Math.min(endMs, segEndMs),
+        text,
+      });
+    }
+
+    if (out.length === 0) return { success: false, error: 'No speech detected in range.' };
+    return { success: true, segments: out };
+  } catch (err) {
+    return { success: false, error: (err as Error).message };
+  } finally {
+    try { fs.unlinkSync(chunkPath); } catch {}
+  }
+}
+
+export async function retranscribeSingleSegment(
+  projectId: string,
+  startMs: number,
+  endMs: number,
+  contextBefore: string,
+  contextAfter: string,
+  apiKeys: string[],
+  model: string,
+): Promise<{ success: boolean; text?: string; error?: string }> {
+  const project = getProjectById(projectId);
+  if (!project) return { success: false, error: 'Project not found' };
+
+  const paths = projectPaths(projectId);
+  if (!fs.existsSync(paths.audio)) return { success: false, error: 'Audio not extracted yet.' };
+  if (apiKeys.length === 0) return { success: false, error: 'Groq API key not configured.' };
+
+  const totalSec = getAudioDuration(paths.audio);
+  const PAD_SEC = 0.3;
+  const startSec = Math.max(0, startMs / 1000 - PAD_SEC);
+  const endSec = Math.min(totalSec, endMs / 1000 + PAD_SEC);
+  const duration = endSec - startSec;
+  if (duration <= 0) return { success: false, error: 'Invalid time range.' };
+
+  let vocabulary: string | undefined;
+  try {
+    const raw = fs.readFileSync(paths.vocabulary, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed?.terms)) {
+      vocabulary = (parsed.terms as string[]).filter(Boolean).join('、');
+    }
+  } catch { /* no vocabulary */ }
+
+  const promptParts: string[] = [];
+  if (vocabulary) promptParts.push(vocabulary.slice(0, 80));
+  const ctx = `${contextBefore}${contextAfter}`.trim();
+  promptParts.push(ctx || DEFAULT_PROMPT_SEED);
+  const prompt = promptParts.join(' ').slice(-PROMPT_MAX_CHARS);
+
+  const tmpDir = app.getPath('temp');
+  const chunkPath = path.join(tmpDir, `vodcut-groq-retry-${projectId}-${Date.now()}.wav`);
+
+  try {
+    await extractChunk(paths.audio, startSec, duration, chunkPath);
+    const apiKey = apiKeys[0];
+    console.log(`[whisper] retranscribe [${startSec.toFixed(1)}s-${endSec.toFixed(1)}s] prompt=${prompt.length}ch`);
+    const result = await uploadToGroq(chunkPath, apiKey, model, prompt);
+    const joined = result.segments.map((s) => s.text.trim()).join('');
+    const text = s2tw(joined).trim();
+    return { success: true, text };
+  } catch (err) {
+    return { success: false, error: (err as Error).message };
+  } finally {
+    try { fs.unlinkSync(chunkPath); } catch {}
+  }
+}
+
 export async function transcribeWithGroq(
   projectId: string,
   audioPath: string,
