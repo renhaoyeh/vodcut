@@ -13,6 +13,12 @@ const ffmpegPath = path.join(process.cwd(), 'node_modules', 'ffmpeg-static', 'ff
 
 // Max chunk duration in seconds (~5 min, well under 25MB WAV limit)
 const MAX_CHUNK_SEC = 300;
+// Whisper avg_logprob threshold — segments below this are flagged/refined.
+// Keep in sync with LOW_CONFIDENCE_THRESHOLD in player.tsx.
+const LOW_CONFIDENCE_THRESHOLD = -0.8;
+// When merging low-confidence runs for auto-refinement, allow up to this many
+// good segments between runs before splitting into separate passes.
+const AUTO_REFINE_GAP_TOLERANCE = 1;
 // Silence detection parameters
 const SILENCE_THRESH_DB = -35;
 const SILENCE_MIN_DURATION = 0.5; // seconds
@@ -358,12 +364,40 @@ export async function retranscribeSingleSegment(
   }
 }
 
+/**
+ * Group indices of low-confidence segments into contiguous runs, allowing
+ * up to `gapTolerance` good segments between runs before splitting.
+ */
+function findLowConfidenceRuns(
+  segments: SrtSegment[],
+  gapTolerance: number,
+): Array<{ lo: number; hi: number }> {
+  const flagged: number[] = [];
+  for (let i = 0; i < segments.length; i++) {
+    const c = segments[i].confidence;
+    if (typeof c === 'number' && c < LOW_CONFIDENCE_THRESHOLD) flagged.push(i);
+  }
+  if (flagged.length === 0) return [];
+
+  const runs: Array<{ lo: number; hi: number }> = [];
+  let lo = flagged[0];
+  let hi = flagged[0];
+  for (let i = 1; i < flagged.length; i++) {
+    const idx = flagged[i];
+    if (idx - hi <= gapTolerance + 1) hi = idx;
+    else { runs.push({ lo, hi }); lo = idx; hi = idx; }
+  }
+  runs.push({ lo, hi });
+  return runs;
+}
+
 export async function transcribeWithGroq(
   projectId: string,
   audioPath: string,
   apiKeys: string[],
   model: string,
   win: BrowserWindow | null,
+  autoRefineLowConfidence: boolean = true,
 ): Promise<{ success: boolean; srtPath?: string; segments?: SrtSegment[]; error?: string }> {
   const project = getProjectById(projectId);
   if (!project) return { success: false, error: 'Project not found' };
@@ -446,6 +480,58 @@ export async function transcribeWithGroq(
 
       // Persist progress after each chunk
       writeProjectFile(paths.progress, { currentChunk: c, numChunks, chunkRanges, segments: allSegments, segIdx });
+    }
+
+    // Auto-refine low-confidence runs with surrounding context as prompt.
+    // This only runs once (no recursion); refined segments may still be low
+    // confidence but we keep them to avoid infinite retries.
+    if (autoRefineLowConfidence) {
+      const runs = findLowConfidenceRuns(allSegments, AUTO_REFINE_GAP_TOLERANCE);
+      if (runs.length > 0) {
+        console.log(`[whisper] auto-refining ${runs.length} low-confidence run(s)`);
+        const CONTEXT_SPAN = 3;
+        // Iterate in reverse so splice-style replacements don't invalidate earlier indices.
+        for (let r = runs.length - 1; r >= 0; r--) {
+          const { lo, hi } = runs[r];
+          const first = allSegments[lo];
+          const last = allSegments[hi];
+          if (!first || !last) continue;
+
+          const displayIdx = runs.length - r;
+          win?.webContents.send('whisper:stage', projectId, JSON.stringify({
+            key: 'player.autoRefining', current: displayIdx, total: runs.length,
+          }));
+
+          const before = allSegments
+            .slice(Math.max(0, lo - CONTEXT_SPAN), lo)
+            .map((s) => s.text).join('');
+          const after = allSegments
+            .slice(hi + 1, hi + 1 + CONTEXT_SPAN)
+            .map((s) => s.text).join('');
+
+          const refined = await retranscribeRangeSegments(
+            projectId, first.startMs, last.endMs, before, after, apiKeys, model,
+          );
+          if (!refined.success || !refined.segments || refined.segments.length === 0) {
+            console.warn(`[whisper] refine run ${displayIdx}/${runs.length} failed: ${refined.error || 'no segments'}`);
+            continue;
+          }
+
+          const replacement: SrtSegment[] = refined.segments.map((s) => ({
+            index: 0, // reindexed below
+            startMs: s.startMs,
+            endMs: s.endMs,
+            text: s.text,
+            // Clear confidence: these are the refined replacements and user-facing
+            // code treats missing confidence as "not flagged".
+            confidence: undefined as number | undefined,
+          }));
+          allSegments.splice(lo, hi - lo + 1, ...replacement);
+        }
+
+        // Renumber sequential indices after all splices.
+        for (let i = 0; i < allSegments.length; i++) allSegments[i].index = i + 1;
+      }
     }
 
     win?.webContents.send('whisper:progress', projectId, 100);

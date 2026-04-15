@@ -28,7 +28,7 @@ interface ElectronAPI {
   setTranscriptionApiKeys: (keys: string[]) => Promise<{ success: boolean }>;
   getRateLimits: () => Promise<Record<string, RateLimitInfo>>;
   getTranscriptionProgress: (projectId: string) => Promise<TranscriptionProgress | null>;
-  transcribe: (projectId: string, model: string) => Promise<{ success: boolean; srtPath?: string; error?: string }>;
+  transcribe: (projectId: string, model: string, autoRefine?: boolean) => Promise<{ success: boolean; srtPath?: string; error?: string }>;
   retranscribeSegment: (
     projectId: string,
     startMs: number,

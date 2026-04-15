@@ -57,7 +57,7 @@ export function registerWhisperHandlers(): void {
     return readProjectFile<TranscriptionProgress>(projectId, paths.progress);
   });
 
-  ipcMain.handle('whisper:transcribe', async (event, projectId: string, model: string) => {
+  ipcMain.handle('whisper:transcribe', async (event, projectId: string, model: string, autoRefine: boolean = true) => {
     const project = getProjectById(projectId);
     if (!project) {
       return { success: false, error: 'Project not found' };
@@ -73,7 +73,7 @@ export function registerWhisperHandlers(): void {
       return { success: false, error: 'Groq API key not configured. Set it in Settings.' };
     }
     const win = BrowserWindow.fromWebContents(event.sender);
-    return transcribeWithGroq(projectId, paths.audio, apiKeys, model as GroqModel, win);
+    return transcribeWithGroq(projectId, paths.audio, apiKeys, model as GroqModel, win, autoRefine);
   });
 
   ipcMain.handle('whisper:retranscribeSegment', async (
