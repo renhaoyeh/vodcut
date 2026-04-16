@@ -1,13 +1,14 @@
 import React, { useEffect, useRef, useState, useCallback } from "react"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { useTranslation } from "react-i18next"
-import { ArrowLeft, Maximize, Minimize, Pause, Play, Loader2, Sparkles, ListVideo, Scissors, Volume2, VolumeX, Mic, FileText, ArrowDown, Pencil, Download, Copy, Wand2, AlertTriangle, RefreshCw, ListChecks, Check, X } from "lucide-react"
+import { ArrowLeft, Maximize, Minimize, Pause, Play, Loader2, Sparkles, ListVideo, Scissors, Volume2, VolumeX, Mic, FileText, ArrowDown, Pencil, Download, Copy, Wand2, AlertTriangle, RefreshCw } from "lucide-react"
 import { Button } from "@/renderer/components/ui/button"
 import { Separator } from "@/renderer/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/renderer/components/ui/select"
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/renderer/components/ui/resizable"
 import { ScrollArea } from "@/renderer/components/ui/scroll-area"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/renderer/components/ui/dialog"
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/renderer/components/ui/context-menu"
 import { Checkbox } from "@/renderer/components/ui/checkbox"
 import { Label } from "@/renderer/components/ui/label"
 import type { AnalysisData } from "@/main/store"
@@ -431,10 +432,6 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
   const [detailIdx, setDetailIdx] = useState<number | null>(null)
   const [editText, setEditText] = useState("")
   const [retryingIdx, setRetryingIdx] = useState<number | null>(null)
-  const [selectMode, setSelectMode] = useState(false)
-  const [selectedIdxs, setSelectedIdxs] = useState<Set<number>>(() => new Set())
-  const [selectAnchor, setSelectAnchor] = useState<number | null>(null)
-  const [retryingRange, setRetryingRange] = useState(false)
 
   // Clip export state (C2)
   const [exportProgress, setExportProgress] = useState<Record<string, number>>({})
@@ -820,78 +817,6 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
     }
   }, [projectId, transcriptionModelKey, persistSubtitles, t])
 
-  const toggleSelectMode = useCallback(() => {
-    setSelectMode((prev) => {
-      if (prev) {
-        setSelectedIdxs(new Set())
-        setSelectAnchor(null)
-      }
-      return !prev
-    })
-  }, [])
-
-  const toggleSelectRow = useCallback((idx: number, shiftKey: boolean) => {
-    setSelectedIdxs((prev) => {
-      const next = new Set(prev)
-      if (shiftKey && selectAnchor !== null) {
-        const lo = Math.min(selectAnchor, idx)
-        const hi = Math.max(selectAnchor, idx)
-        for (let i = lo; i <= hi; i++) next.add(i)
-        return next
-      }
-      if (next.has(idx)) next.delete(idx)
-      else next.add(idx)
-      return next
-    })
-    if (!shiftKey) setSelectAnchor(idx)
-  }, [selectAnchor])
-
-  const clearSelection = useCallback(() => {
-    setSelectedIdxs(new Set())
-    setSelectAnchor(null)
-  }, [])
-
-  const retranscribeSelection = useCallback(async () => {
-    if (selectedIdxs.size === 0) return
-    const sorted = [...selectedIdxs].sort((a, b) => a - b)
-    const lo = sorted[0]
-    const hi = sorted[sorted.length - 1]
-    // Enforce contiguous selection.
-    if (hi - lo + 1 !== sorted.length) {
-      toast.error(t("player.selectionNotContiguous"))
-      return
-    }
-    const cur = subtitlesRef.current
-    const first = cur[lo]
-    const last = cur[hi]
-    if (!first || !last) return
-    const CONTEXT_SPAN = 3
-    const before = cur.slice(Math.max(0, lo - CONTEXT_SPAN), lo).map((s) => s.text).join("")
-    const after = cur.slice(hi + 1, hi + 1 + CONTEXT_SPAN).map((s) => s.text).join("")
-    setRetryingRange(true)
-    try {
-      const result = await window.electronAPI.retranscribeRange(
-        projectId, first.startMs, last.endMs, before, after, transcriptionModelKey,
-      )
-      if (!result.success || !result.segments || result.segments.length === 0) {
-        toast.error(result.error || t("player.retranscribeFailed"))
-        return
-      }
-      const replacement: Subtitle[] = result.segments.map((s) => ({
-        startMs: s.startMs, endMs: s.endMs, text: s.text, confidence: undefined as number | undefined,
-      }))
-      const next = [...cur.slice(0, lo), ...replacement, ...cur.slice(hi + 1)]
-      await persistSubtitles(next)
-      toast.success(t("player.retranscribeDone"))
-      setSelectedIdxs(new Set())
-      setSelectAnchor(null)
-      setSelectMode(false)
-    } catch (err) {
-      toast.error((err as Error).message)
-    } finally {
-      setRetryingRange(false)
-    }
-  }, [selectedIdxs, projectId, transcriptionModelKey, persistSubtitles, t])
 
   // ── YouTube chapters (B1) ─────────────────────────────────
   const copyYouTubeChapters = useCallback(async () => {
@@ -1212,17 +1137,6 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                     <Wand2 className="mr-1.5 size-3.5" />
                     {t("player.enhanceTranscript")}
                   </Button>
-                  <Button
-                    size="sm"
-                    variant={selectMode ? "default" : "ghost"}
-                    className="h-8 text-xs"
-                    onClick={toggleSelectMode}
-                    disabled={!hasSrt}
-                    title={t("player.selectModeTooltip") as string}
-                  >
-                    <ListChecks className="mr-1.5 size-3.5" />
-                    {t("player.selectMode")}
-                  </Button>
                 </div>
                 <div
                   ref={srtScrollRef}
@@ -1234,55 +1148,41 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                       const sub = subtitles[vItem.index]
                       const active = vItem.index === activeSrtIdx
                       const lowConfidence = typeof sub.confidence === "number" && sub.confidence < LOW_CONFIDENCE_THRESHOLD
-                      const isSelected = selectMode && selectedIdxs.has(vItem.index)
                       return (
-                        <div
-                          key={vItem.index}
-                          style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${vItem.start}px)` }}
-                          ref={srtVirtualizer.measureElement}
-                          data-index={vItem.index}
-                          className={`group border-b px-3 py-2 transition-colors cursor-pointer ${
-                            active ? "bg-accent/50 border-l-2 border-l-primary" : "hover:bg-accent"
-                          } ${lowConfidence ? "bg-orange-500/10 border-l-2 border-l-orange-500/60" : ""} ${
-                            isSelected ? "bg-primary/15 border-l-2 border-l-primary" : ""
-                          }`}
-                          onClick={(e) => {
-                            if (selectMode) { toggleSelectRow(vItem.index, e.shiftKey); return }
-                            setActiveClip(null); seekToMs(sub.startMs)
-                          }}
-                        >
-                          <div className="flex items-center gap-1.5">
-                            {selectMode && (
-                              <span className={`inline-flex size-4 items-center justify-center rounded border ${
-                                isSelected ? "bg-primary border-primary text-primary-foreground" : "border-muted-foreground/50"
-                              }`}>
-                                {isSelected && <Check className="size-3" />}
-                              </span>
-                            )}
-                            <span className="text-xs tabular-nums text-muted-foreground">
-                              {formatMs(sub.startMs)} – {formatMs(sub.endMs)}
-                            </span>
-                            {lowConfidence && (
-                              <AlertTriangle className="size-3 text-orange-500" aria-label={t("player.lowConfidence") as string} />
-                            )}
-                            {!selectMode && (
-                              <button
-                                type="button"
-                                className="ml-auto rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
-                                title={t("player.editSubtitle") as string}
-                                onClick={(e) => { e.stopPropagation(); openSubtitleDetail(vItem.index) }}
-                              >
-                                <Pencil className="size-3.5" />
-                              </button>
-                            )}
-                          </div>
-                          <p className="mt-0.5 text-sm">{sub.text}</p>
-                        </div>
+                        <ContextMenu key={vItem.index}>
+                          <ContextMenuTrigger asChild>
+                            <div
+                              style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${vItem.start}px)` }}
+                              ref={srtVirtualizer.measureElement}
+                              data-index={vItem.index}
+                              className={`group border-b px-3 py-2 transition-colors cursor-pointer ${
+                                active ? "bg-accent/50 border-l-2 border-l-primary" : "hover:bg-accent"
+                              } ${lowConfidence ? "bg-orange-500/10 border-l-2 border-l-orange-500/60" : ""}`}
+                              onClick={() => { setActiveClip(null); seekToMs(sub.startMs) }}
+                            >
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs tabular-nums text-muted-foreground">
+                                  {formatMs(sub.startMs)} – {formatMs(sub.endMs)}
+                                </span>
+                                {lowConfidence && (
+                                  <AlertTriangle className="size-3 text-orange-500" aria-label={t("player.lowConfidence") as string} />
+                                )}
+                              </div>
+                              <p className="mt-0.5 text-sm">{sub.text}</p>
+                            </div>
+                          </ContextMenuTrigger>
+                          <ContextMenuContent>
+                            <ContextMenuItem onClick={() => openSubtitleDetail(vItem.index)}>
+                              <Pencil className="mr-2 size-3.5" />
+                              {t("player.editSubtitle")}
+                            </ContextMenuItem>
+                          </ContextMenuContent>
+                        </ContextMenu>
                       )
                     })}
                   </div>
                 </div>
-                {!srtAutoScroll && selectedIdxs.size === 0 && (
+                {!srtAutoScroll && (
                   <button
                     className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground shadow-lg transition-opacity hover:opacity-90"
                     onClick={() => { srtAutoScrollRef.current = true; setSrtAutoScroll(true); if (activeSrtIdx !== -1) srtVirtualizer.scrollToIndex(activeSrtIdx, { align: "center", behavior: "smooth" }) }}
@@ -1290,34 +1190,6 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                     <ArrowDown className="size-3.5" />
                     {t("player.scrollToActive")}
                   </button>
-                )}
-                {selectMode && selectedIdxs.size > 0 && (
-                  <div className="shrink-0 flex items-center gap-3 border-t bg-muted/30 px-4 py-2.5">
-                    <span className="text-xs text-muted-foreground">
-                      {t("player.selectedCount", { count: selectedIdxs.size })}
-                    </span>
-                    <Button
-                      size="sm"
-                      className="h-8 text-xs"
-                      onClick={retranscribeSelection}
-                      disabled={retryingRange}
-                    >
-                      {retryingRange
-                        ? <Loader2 className="mr-1 size-3.5 animate-spin" />
-                        : <RefreshCw className="mr-1 size-3.5" />}
-                      {t("player.retranscribeSelection", { count: selectedIdxs.size })}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-8 text-xs"
-                      onClick={clearSelection}
-                      disabled={retryingRange}
-                    >
-                      <X className="mr-1 size-3.5" />
-                      {t("player.clearSelection")}
-                    </Button>
-                  </div>
                 )}
               </div>
             )}
@@ -1559,19 +1431,17 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                   autoFocus
                 />
                 <div className="flex flex-wrap items-center gap-2">
-                  {lowConfidence && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={retryingIdx === detailIdx}
-                      onClick={() => retranscribeSubtitle(detailIdx)}
-                    >
-                      {retryingIdx === detailIdx
-                        ? <Loader2 className="mr-1.5 size-3.5 animate-spin" />
-                        : <RefreshCw className="mr-1.5 size-3.5" />}
-                      {t("player.retranscribeSubtitle")}
-                    </Button>
-                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={retryingIdx === detailIdx}
+                    onClick={() => retranscribeSubtitle(detailIdx)}
+                  >
+                    {retryingIdx === detailIdx
+                      ? <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                      : <RefreshCw className="mr-1.5 size-3.5" />}
+                    {t("player.retranscribeSubtitle")}
+                  </Button>
                 </div>
                 <DialogFooter>
                   <Button variant="ghost" size="sm" onClick={() => setDetailIdx(null)}>
