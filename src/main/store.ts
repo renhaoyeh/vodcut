@@ -30,12 +30,14 @@ export type GroqModel = 'whisper-large-v3' | 'whisper-large-v3-turbo';
 
 interface SettingsSchema {
   transcriptionApiKeys: string[];
+  denoiseEnabled: boolean;
 }
 
 export const settingsStore = new Store<SettingsSchema>({
   name: 'settings',
   defaults: {
     transcriptionApiKeys: [],
+    denoiseEnabled: false,
   },
 });
 
@@ -150,6 +152,7 @@ export function projectPaths(projectId: string) {
     analysisProgress: path.join(dir, 'analysis-progress.json'),
     progress: path.join(dir, 'transcription-progress.json'),
     vocabulary: path.join(dir, 'vocabulary.json'),
+    audioDenoised: path.join(dir, 'audio-clean.wav'),
   };
 }
 

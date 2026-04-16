@@ -52,6 +52,11 @@ interface ElectronAPI {
   onWhisperProgress: (callback: (projectId: string, percent: number) => void) => () => void;
   onWhisperStage: (callback: (projectId: string, stage: string) => void) => () => void;
 
+  // Denoise (DeepFilterNet)
+  isDenoiseAvailable: () => Promise<boolean>;
+  getDenoiseEnabled: () => Promise<boolean>;
+  setDenoiseEnabled: (enabled: boolean) => Promise<{ success: boolean }>;
+
   // Clip export (C1/C2)
   exportClip: (
     projectId: string,

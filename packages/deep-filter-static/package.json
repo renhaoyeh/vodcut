@@ -1,0 +1,10 @@
+{
+  "name": "deep-filter-static",
+  "version": "0.5.6",
+  "description": "Static binary for DeepFilterNet noise suppression (like ffmpeg-static)",
+  "main": "index.js",
+  "scripts": {
+    "postinstall": "node install.js"
+  },
+  "license": "MIT"
+}

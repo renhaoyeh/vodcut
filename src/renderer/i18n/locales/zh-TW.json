@@ -24,13 +24,18 @@
     "rateLimitNoData": "尚無用量資料（使用 API 後自動更新）",
     "autoRefineLabel": "轉錄精修",
     "autoRefineTitle": "自動精修低信心段落",
-    "autoRefineHelp": "轉錄完成後,自動把 Whisper 信心不足的段落用前後字幕當 prompt 重新辨識一次。會多消耗 API 額度。"
+    "autoRefineHelp": "轉錄完成後,自動把 Whisper 信心不足的段落用前後字幕當 prompt 重新辨識一次。會多消耗 API 額度。",
+    "denoiseLabel": "音訊去噪",
+    "denoiseTitle": "轉錄前自動去噪 (DeepFilterNet)",
+    "denoiseHelp": "在送給 Whisper 之前先用 DeepFilterNet 去除背景雜音（音樂、遊戲音效、鍵盤聲）。對嘈雜的錄音可顯著提升轉錄品質。",
+    "denoiseNotInstalled": "未偵測到 DeepFilter 執行檔。請執行 npm install 下載。"
   },
   "player": {
     "transcribe": "轉錄",
     "retranscribe": "重新轉錄",
     "resumeTranscribe": "繼續轉錄 ({{current}}/{{total}})",
     "transcribeNoKey": "請先在設定中填入 Groq Whisper API Key",
+    "denoising": "音訊去噪中 (DeepFilterNet)...",
     "convertingAudio": "轉換音訊中...",
     "recognizing": "辨識中...",
     "detectingSilence": "偵測靜音段落中...",

@@ -2,9 +2,10 @@ import { BrowserWindow, app } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { spawn } from 'child_process';
-import { getProjectById, updateProject, projectPaths, readProjectFile, writeProjectFile, saveGroqRateLimits, saveGroqError, clearGroqError, type TranscriptionProgress } from './store';
+import { getProjectById, updateProject, projectPaths, readProjectFile, writeProjectFile, saveGroqRateLimits, saveGroqError, clearGroqError, settingsStore, type TranscriptionProgress } from './store';
 import { type SrtSegment, segmentsToSrt } from './whisper';
 import { getGroqClient, extractRateLimitHeaders } from './groq-client';
+import { isDenoiseAvailable, denoiseAudio } from './denoise';
 import * as OpenCC from 'opencc-js';
 
 const s2tw: (text: string) => string = OpenCC.Converter({ from: 'cn', to: 'twp' });
@@ -406,7 +407,24 @@ export async function transcribeWithGroq(
   const paths = projectPaths(projectId);
 
   try {
-    const totalSec = getAudioDuration(audioPath);
+    // Optional: denoise audio before transcription (DeepFilterNet)
+    let workingAudio = audioPath;
+    const denoiseEnabled = settingsStore.get('denoiseEnabled');
+    if (denoiseEnabled && isDenoiseAvailable()) {
+      if (!fs.existsSync(paths.audioDenoised)) {
+        win?.webContents.send('whisper:stage', projectId, JSON.stringify({ key: 'player.denoising' }));
+        console.log('[whisper] denoising audio with DeepFilterNet...');
+        await denoiseAudio(audioPath, paths.audioDenoised, (pct) => {
+          win?.webContents.send('whisper:progress', projectId, pct);
+        });
+        console.log('[whisper] denoise complete');
+      } else {
+        console.log('[whisper] using cached denoised audio');
+      }
+      workingAudio = paths.audioDenoised;
+    }
+
+    const totalSec = getAudioDuration(workingAudio);
 
     // Resume from saved progress
     const saved = readProjectFile<TranscriptionProgress>(projectId, paths.progress);
@@ -421,7 +439,7 @@ export async function transcribeWithGroq(
       console.log(`[whisper] resuming with ${chunkRanges.length} cached chunks (skipped silence detection)`);
     } else {
       win?.webContents.send('whisper:stage', projectId, JSON.stringify({ key: 'player.detectingSilence' }));
-      const silences = await detectSilences(audioPath);
+      const silences = await detectSilences(workingAudio);
       chunkRanges = buildChunkRanges(totalSec, silences);
       console.log(`[whisper] detected ${silences.length} silence gaps -> ${chunkRanges.length} chunks`);
     }
@@ -454,7 +472,7 @@ export async function transcribeWithGroq(
       win?.webContents.send('whisper:progress', projectId, Math.round((c / numChunks) * 100));
 
       // Extract chunk WAV
-      await extractChunk(audioPath, startSec, duration, chunkPath);
+      await extractChunk(workingAudio, startSec, duration, chunkPath);
 
       // Upload to Groq — rotate API keys across chunks
       const keyIndex = c % apiKeys.length;
