@@ -25,6 +25,11 @@ const AUTO_REFINE_GAP_TOLERANCE = 1;
 const SILENCE_THRESH_DB = -35;
 const SILENCE_MIN_DURATION = 0.5; // seconds
 
+// Max characters per subtitle line. Segments longer than this are split.
+const MAX_SUBTITLE_CHARS = 18;
+// Punctuation marks where we prefer to split long segments (Chinese + common).
+const SPLIT_PUNCTUATION = /[，。！？、；：…？！，,\.!\?;:]/;
+
 interface SilenceGap {
   startSec: number;
   endSec: number;
@@ -152,6 +157,76 @@ function buildChunkRanges(totalSec: number, silences: SilenceGap[]): ChunkRange[
   chunks.push({ startSec: chunkStart, endSec: chunkEnd });
 
   return chunks;
+}
+
+/**
+ * Split segments that exceed MAX_SUBTITLE_CHARS into shorter subtitle lines.
+ * Prefers splitting at punctuation; falls back to even character splits.
+ * Timestamps are distributed proportionally by character count.
+ */
+function splitLongSegments(segments: SrtSegment[]): SrtSegment[] {
+  const out: SrtSegment[] = [];
+  for (const seg of segments) {
+    const text = seg.text.trim();
+    if (text.length <= MAX_SUBTITLE_CHARS) {
+      out.push(seg);
+      continue;
+    }
+    const pieces = splitText(text);
+    const totalChars = text.length;
+    const totalMs = seg.endMs - seg.startMs;
+    let cursor = seg.startMs;
+    for (let i = 0; i < pieces.length; i++) {
+      const piece = pieces[i];
+      const durationMs = Math.round((piece.length / totalChars) * totalMs);
+      const endMs = i === pieces.length - 1 ? seg.endMs : cursor + durationMs;
+      out.push({
+        index: 0, // reindexed by caller
+        startMs: cursor,
+        endMs,
+        text: piece,
+        confidence: seg.confidence,
+      });
+      cursor = endMs;
+    }
+  }
+  // Reindex
+  for (let i = 0; i < out.length; i++) out[i].index = i + 1;
+  return out;
+}
+
+/**
+ * Split a long text into pieces of at most MAX_SUBTITLE_CHARS.
+ * Greedy: accumulate characters until the limit, then break at the last
+ * punctuation position within the piece. If there's no punctuation, hard-break
+ * at MAX_SUBTITLE_CHARS.
+ */
+function splitText(text: string): string[] {
+  if (text.length <= MAX_SUBTITLE_CHARS) return [text];
+
+  const result: string[] = [];
+  let remaining = text;
+
+  while (remaining.length > MAX_SUBTITLE_CHARS) {
+    const window = remaining.slice(0, MAX_SUBTITLE_CHARS);
+    // Find the last punctuation position within the window (split after it)
+    let splitAt = -1;
+    for (let i = window.length - 1; i >= 0; i--) {
+      if (SPLIT_PUNCTUATION.test(window[i])) {
+        splitAt = i + 1; // keep the punctuation with the left piece
+        break;
+      }
+    }
+    // No punctuation found — hard-break at the limit
+    if (splitAt <= 0) splitAt = MAX_SUBTITLE_CHARS;
+
+    const piece = remaining.slice(0, splitAt).trim();
+    if (piece) result.push(piece);
+    remaining = remaining.slice(splitAt).trim();
+  }
+  if (remaining) result.push(remaining);
+
+  return result;
 }
 
 function extractChunk(audioPath: string, startSec: number, durationSec: number, outPath: string): Promise<void> {
@@ -302,7 +377,13 @@ export async function retranscribeRangeSegments(
     }
 
     if (out.length === 0) return { success: false, error: 'No speech detected in range.' };
-    return { success: true, segments: out };
+
+    // Split long segments into shorter subtitle lines
+    const asSrt: SrtSegment[] = out.map((s, i) => ({ index: i + 1, ...s }));
+    const split = splitLongSegments(asSrt);
+    const finalOut = split.map(({ startMs, endMs, text }) => ({ startMs, endMs, text }));
+
+    return { success: true, segments: finalOut };
   } catch (err) {
     return { success: false, error: (err as Error).message };
   } finally {
@@ -555,11 +636,14 @@ export async function transcribeWithGroq(
 
     win?.webContents.send('whisper:progress', projectId, 100);
 
-    const srtContent = segmentsToSrt(allSegments);
+    // Split long subtitle segments into shorter, readable lines.
+    const finalSegments = splitLongSegments(allSegments);
+
+    const srtContent = segmentsToSrt(finalSegments);
     fs.writeFileSync(paths.srt, srtContent, 'utf8');
 
     // Save confidence-aware segments.json (SRT can't carry metadata).
-    writeProjectFile(paths.segments, allSegments);
+    writeProjectFile(paths.segments, finalSegments);
 
     // Also save a copy next to the video
     const videoDir = path.dirname(project.filePath);
@@ -571,7 +655,7 @@ export async function transcribeWithGroq(
 
     updateProject(projectId, { status: 'completed' });
 
-    return { success: true, srtPath: paths.srt, segments: allSegments };
+    return { success: true, srtPath: paths.srt, segments: finalSegments };
   } catch (err) {
     return { success: false, error: (err as Error).message };
   }
