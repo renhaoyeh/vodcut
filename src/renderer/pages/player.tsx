@@ -231,7 +231,7 @@ function PlaybackControls({
       {clip && (
         <button
           onClick={onClearClip}
-          className="shrink-0 rounded-full bg-primary px-2.5 py-0.5 text-[10px] font-medium text-primary-foreground hover:bg-primary/80"
+          className="shrink-0 rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/80"
         >
           {clearClipLabel}
         </button>
@@ -1055,78 +1055,86 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
   return (
     <div className="flex h-full flex-1 flex-col overflow-hidden bg-background">
       {!isFullscreen && (
-        <div className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
-          <Button variant="ghost" size="icon" className="size-8" onClick={onBack}>
-            <ArrowLeft className="size-4" />
-          </Button>
-          <span className="flex-1 truncate text-sm font-medium">{fileName}</span>
-
-          {/* Step 1: Transcription */}
-          <div className="flex items-center gap-1">
-            {!transcribing ? (
-              <>
-                <Select value={transcriptionModelKey} onValueChange={setTranscriptionModelKey}>
-                  <SelectTrigger className="h-8 w-40 text-xs" disabled={!hasTranscriptionKey}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TRANSCRIPTION_MODELS.map((m) => (
-                      <SelectItem key={m.value} value={m.value} className="text-xs">
-                        {m.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button variant="outline" size="sm" onClick={handleTranscribe} disabled={!hasTranscriptionKey}
-                  title={!hasTranscriptionKey ? t("player.transcribeNoKey") : undefined}
-                >
-                  <Mic className="mr-1 size-4" />
-                  {savedProgress ? t("player.resumeTranscribe", { current: savedProgress.current, total: savedProgress.total }) : hasSrt ? t("player.retranscribe") : t("player.transcribe")}
-                </Button>
-              </>
-            ) : (
-              <div className="flex items-center gap-2">
-                <Loader2 className="size-4 animate-spin" />
-                <span className="text-xs text-muted-foreground">{transcribeStage} {transcribeProgress > 0 ? `${transcribeProgress}%` : ""}</span>
-              </div>
-            )}
+        <div className="shrink-0 border-b">
+          {/* Row 1: Navigation */}
+          <div className="flex h-11 items-center gap-2 px-4">
+            <Button variant="ghost" size="icon" className="size-8" onClick={onBack}>
+              <ArrowLeft className="size-4" />
+            </Button>
+            <span className="flex-1 truncate text-sm font-medium">{fileName}</span>
           </div>
 
-          <Separator orientation="vertical" className="h-5" />
+          {/* Row 2: Pipeline steps */}
+          <div className="flex items-center gap-6 border-t bg-muted/30 px-4 py-2">
+            {/* Step 1: Transcription */}
+            <div className="flex items-center gap-2">
+              <span className="flex size-5 items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold text-primary">1</span>
+              <Mic className="size-3.5 text-muted-foreground" />
+              {!transcribing ? (
+                <div className="flex items-center gap-2">
+                  <Select value={transcriptionModelKey} onValueChange={setTranscriptionModelKey}>
+                    <SelectTrigger className="h-8 w-40 text-xs" disabled={!hasTranscriptionKey}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TRANSCRIPTION_MODELS.map((m) => (
+                        <SelectItem key={m.value} value={m.value} className="text-xs">
+                          {m.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button variant="outline" size="sm" onClick={handleTranscribe} disabled={!hasTranscriptionKey}
+                    title={!hasTranscriptionKey ? t("player.transcribeNoKey") : undefined}
+                  >
+                    {savedProgress ? t("player.resumeTranscribe", { current: savedProgress.current, total: savedProgress.total }) : hasSrt ? t("player.retranscribe") : t("player.transcribe")}
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Loader2 className="size-4 animate-spin" />
+                  <span className="text-xs text-muted-foreground">{transcribeStage} {transcribeProgress > 0 ? `${transcribeProgress}%` : ""}</span>
+                </div>
+              )}
+            </div>
 
-          {/* Step 2: Analysis */}
-          <div className="flex items-center gap-1">
-            {!analyzing ? (
-              <>
-                <Select value={claudeModelKey} onValueChange={setClaudeModelKey}>
-                  <SelectTrigger className="h-8 w-36 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CLAUDE_MODELS.map((m) => (
-                      <SelectItem key={m.value} value={m.value} className="text-xs">
-                        {m.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button variant="outline" size="sm" onClick={handleAnalyze}
-                  disabled={!hasSrt}
-                  title={!hasSrt ? t("player.analyzeNoSrt") : undefined}
-                >
-                  <Sparkles className="mr-1 size-4" />
-                  {analysis ? t("player.reanalyze") : t("player.analyze")}
-                </Button>
-              </>
-            ) : (
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" disabled>
-                  <Loader2 className="mr-1 size-4 animate-spin" />
-                  {t("player.analyzing")}
-                </Button>
-                <span className="text-xs text-muted-foreground">{analysisStage}</span>
-              </div>
-            )}
+            <Separator orientation="vertical" className="h-6" />
+
+            {/* Step 2: Analysis */}
+            <div className="flex items-center gap-2">
+              <span className="flex size-5 items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold text-primary">2</span>
+              <Sparkles className="size-3.5 text-muted-foreground" />
+              {!analyzing ? (
+                <div className="flex items-center gap-2">
+                  <Select value={claudeModelKey} onValueChange={setClaudeModelKey}>
+                    <SelectTrigger className="h-8 w-36 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CLAUDE_MODELS.map((m) => (
+                        <SelectItem key={m.value} value={m.value} className="text-xs">
+                          {m.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button variant="outline" size="sm" onClick={handleAnalyze}
+                    disabled={!hasSrt}
+                    title={!hasSrt ? t("player.analyzeNoSrt") : undefined}
+                  >
+                    {analysis ? t("player.reanalyze") : t("player.analyze")}
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" disabled>
+                    <Loader2 className="mr-1 size-4 animate-spin" />
+                    {t("player.analyzing")}
+                  </Button>
+                  <span className="text-xs text-muted-foreground">{analysisStage}</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -1227,27 +1235,27 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
 
             {panelTab === "srt" && (
               <div className="relative flex flex-1 flex-col overflow-hidden">
-                <div className="flex shrink-0 items-center gap-1 border-b px-2 py-1">
+                <div className="flex shrink-0 items-center gap-1.5 border-b px-3 py-1.5">
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-7 text-[11px]"
+                    className="h-8 text-xs"
                     onClick={openVocabDialog}
                     disabled={!hasSrt}
                     title={t("player.enhanceTranscriptTooltip") as string}
                   >
-                    <Wand2 className="mr-1 size-3.5" />
+                    <Wand2 className="mr-1.5 size-3.5" />
                     {t("player.enhanceTranscript")}
                   </Button>
                   <Button
                     size="sm"
                     variant={selectMode ? "default" : "ghost"}
-                    className="h-7 text-[11px]"
+                    className="h-8 text-xs"
                     onClick={toggleSelectMode}
                     disabled={!hasSrt}
                     title={t("player.selectModeTooltip") as string}
                   >
-                    <ListChecks className="mr-1 size-3.5" />
+                    <ListChecks className="mr-1.5 size-3.5" />
                     {t("player.selectMode")}
                   </Button>
                 </div>
@@ -1282,13 +1290,13 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                         >
                           <div className="flex items-center gap-1.5">
                             {selectMode && (
-                              <span className={`inline-flex size-3.5 items-center justify-center rounded border ${
+                              <span className={`inline-flex size-4 items-center justify-center rounded border ${
                                 isSelected ? "bg-primary border-primary text-primary-foreground" : "border-muted-foreground/50"
                               }`}>
-                                {isSelected && <Check className="size-2.5" />}
+                                {isSelected && <Check className="size-3" />}
                               </span>
                             )}
-                            <span className="text-[10px] tabular-nums text-muted-foreground">
+                            <span className="text-xs tabular-nums text-muted-foreground">
                               {formatMs(sub.startMs)} – {formatMs(sub.endMs)}
                             </span>
                             {lowConfidence && (
@@ -1298,40 +1306,40 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                               {lowConfidence && (
                                 <button
                                   type="button"
-                                  className="rounded p-1 text-muted-foreground hover:bg-background hover:text-foreground disabled:opacity-50"
+                                  className="rounded p-1.5 text-muted-foreground hover:bg-background hover:text-foreground disabled:opacity-50"
                                   title={t("player.retranscribeSubtitle") as string}
                                   disabled={retryingIdx === vItem.index}
                                   onClick={(e) => { e.stopPropagation(); retranscribeSubtitle(vItem.index) }}
                                 >
                                   {retryingIdx === vItem.index
-                                    ? <Loader2 className="size-3 animate-spin" />
-                                    : <RefreshCw className="size-3" />}
+                                    ? <Loader2 className="size-3.5 animate-spin" />
+                                    : <RefreshCw className="size-3.5" />}
                                 </button>
                               )}
                               <button
                                 type="button"
-                                className="rounded p-1 text-muted-foreground hover:bg-background hover:text-foreground"
+                                className="rounded p-1.5 text-muted-foreground hover:bg-background hover:text-foreground"
                                 title={t("player.editSubtitle") as string}
                                 onClick={(e) => { e.stopPropagation(); startEditSubtitle(vItem.index) }}
                               >
-                                <Pencil className="size-3" />
+                                <Pencil className="size-3.5" />
                               </button>
                               <button
                                 type="button"
-                                className="rounded p-1 text-muted-foreground hover:bg-background hover:text-foreground"
+                                className="rounded p-1.5 text-muted-foreground hover:bg-background hover:text-foreground"
                                 title={t("player.splitSubtitle") as string}
                                 onClick={(e) => { e.stopPropagation(); splitSubtitle(vItem.index) }}
                               >
-                                <Split className="size-3" />
+                                <Split className="size-3.5" />
                               </button>
                               {vItem.index < subtitles.length - 1 && (
                                 <button
                                   type="button"
-                                  className="rounded p-1 text-muted-foreground hover:bg-background hover:text-foreground"
+                                  className="rounded p-1.5 text-muted-foreground hover:bg-background hover:text-foreground"
                                   title={t("player.mergeSubtitle") as string}
                                   onClick={(e) => { e.stopPropagation(); mergeWithNext(vItem.index) }}
                                 >
-                                  <Merge className="size-3" />
+                                  <Merge className="size-3.5" />
                                 </button>
                               )}
                             </div>
@@ -1367,13 +1375,13 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                   </button>
                 )}
                 {selectMode && selectedIdxs.size > 0 && (
-                  <div className="shrink-0 flex items-center gap-2 border-t bg-background px-3 py-2">
+                  <div className="shrink-0 flex items-center gap-3 border-t bg-muted/30 px-4 py-2.5">
                     <span className="text-xs text-muted-foreground">
                       {t("player.selectedCount", { count: selectedIdxs.size })}
                     </span>
                     <Button
                       size="sm"
-                      className="h-7 text-[11px]"
+                      className="h-8 text-xs"
                       onClick={retranscribeSelection}
                       disabled={retryingRange}
                     >
@@ -1385,7 +1393,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="h-7 text-[11px]"
+                      className="h-8 text-xs"
                       onClick={clearSelection}
                       disabled={retryingRange}
                     >
@@ -1407,7 +1415,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                     return (
                       <button
                         key={m}
-                        className={`rounded-md px-2 py-0.5 text-[11px] transition-colors ${
+                        className={`rounded-md px-2.5 py-1 text-xs transition-colors ${
                           isActive
                             ? "bg-primary text-primary-foreground"
                             : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -1434,7 +1442,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                       <span className="text-xs font-medium text-muted-foreground">{t("player.tabSections", { count: analysis.sections.length })}</span>
                       <button
                         type="button"
-                        className="ml-auto flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                        className="ml-auto flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
                         title={t("player.copyYouTubeChaptersTooltip") as string}
                         onClick={copyYouTubeChapters}
                         disabled={analysis.sections.length === 0}
@@ -1455,7 +1463,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                             onClick={() => { setActiveClip(null); seekToMs(sec.startMs) }}
                           >
                             <div className="flex items-baseline gap-2">
-                              <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+                              <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                                 {formatMs(sec.startMs)}
                               </span>
                               <span className="text-sm font-medium">{sec.title}</span>
@@ -1475,13 +1483,13 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                       <span className="text-xs font-medium text-muted-foreground">{t("player.tabClips", { count: analysis.clips.length })}</span>
                       <div className="ml-auto flex items-center gap-2">
                         <label
-                          className="flex items-center gap-1 text-[10px] text-muted-foreground"
+                          className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer"
                           title={t("player.exportBurnSubtitlesTooltip") as string}
                         >
                           <Checkbox
                             checked={exportBurnSubs}
                             onCheckedChange={(v) => setExportBurnSubs(v === true)}
-                            className="size-3"
+                            className="size-3.5"
                           />
                           {t("player.exportBurnSubtitles")}
                         </label>
@@ -1507,15 +1515,15 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                               }}
                             >
                               <div className="flex items-baseline gap-2">
-                                <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+                                <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                                   {formatMs(clip.startMs)} – {formatMs(clip.endMs)}
                                 </span>
                                 {isActive && (
-                                  <span className="text-[10px] text-primary">{t("player.playingClickToCancel")}</span>
+                                  <span className="text-xs text-primary">{t("player.playingClickToCancel")}</span>
                                 )}
                                 <button
                                   type="button"
-                                  className="ml-auto flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground opacity-0 transition-opacity hover:bg-background hover:text-foreground group-hover:opacity-100 disabled:opacity-50"
+                                  className="ml-auto flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground opacity-0 transition-opacity hover:bg-background hover:text-foreground group-hover:opacity-100 disabled:opacity-50"
                                   title={t("player.exportClipTooltip") as string}
                                   disabled={exporting}
                                   onClick={(e) => { e.stopPropagation(); exportClip(clip) }}
