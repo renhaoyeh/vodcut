@@ -90,3 +90,6 @@ typings/
 
 # Electron-Forge
 out/
+
+# DeepFilter binary
+packages/deep-filter-static/deep-filter.exe
