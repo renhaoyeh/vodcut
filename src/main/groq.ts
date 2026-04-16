@@ -254,7 +254,10 @@ export async function retranscribeRangeSegments(
   if (!fs.existsSync(paths.audio)) return { success: false, error: 'Audio not extracted yet.' };
   if (apiKeys.length === 0) return { success: false, error: 'Groq API key not configured.' };
 
-  const totalSec = getAudioDuration(paths.audio);
+  // Use denoised audio if available and denoise is enabled
+  const denoiseEnabled = settingsStore.get('denoiseEnabled');
+  const audioPath = denoiseEnabled && fs.existsSync(paths.audioDenoised) ? paths.audioDenoised : paths.audio;
+  const totalSec = getAudioDuration(audioPath);
   const PAD_SEC = 0.3;
   const chunkStartSec = Math.max(0, startMs / 1000 - PAD_SEC);
   const chunkEndSec = Math.min(totalSec, endMs / 1000 + PAD_SEC);
@@ -280,7 +283,7 @@ export async function retranscribeRangeSegments(
   const chunkPath = path.join(tmpDir, `vodcut-groq-retry-range-${projectId}-${Date.now()}.wav`);
 
   try {
-    await extractChunk(paths.audio, chunkStartSec, duration, chunkPath);
+    await extractChunk(audioPath, chunkStartSec, duration, chunkPath);
     const apiKey = apiKeys[0];
     console.log(`[whisper] retranscribe range [${chunkStartSec.toFixed(1)}s-${chunkEndSec.toFixed(1)}s] prompt=${prompt.length}ch`);
     const result = await uploadToGroq(chunkPath, apiKey, model, prompt);
@@ -326,7 +329,10 @@ export async function retranscribeSingleSegment(
   if (!fs.existsSync(paths.audio)) return { success: false, error: 'Audio not extracted yet.' };
   if (apiKeys.length === 0) return { success: false, error: 'Groq API key not configured.' };
 
-  const totalSec = getAudioDuration(paths.audio);
+  // Use denoised audio if available and denoise is enabled
+  const denoiseEnabled = settingsStore.get('denoiseEnabled');
+  const audioPath = denoiseEnabled && fs.existsSync(paths.audioDenoised) ? paths.audioDenoised : paths.audio;
+  const totalSec = getAudioDuration(audioPath);
   const PAD_SEC = 0.3;
   const startSec = Math.max(0, startMs / 1000 - PAD_SEC);
   const endSec = Math.min(totalSec, endMs / 1000 + PAD_SEC);
@@ -352,7 +358,7 @@ export async function retranscribeSingleSegment(
   const chunkPath = path.join(tmpDir, `vodcut-groq-retry-${projectId}-${Date.now()}.wav`);
 
   try {
-    await extractChunk(paths.audio, startSec, duration, chunkPath);
+    await extractChunk(audioPath, startSec, duration, chunkPath);
     const apiKey = apiKeys[0];
     console.log(`[whisper] retranscribe [${startSec.toFixed(1)}s-${endSec.toFixed(1)}s] prompt=${prompt.length}ch`);
     const result = await uploadToGroq(chunkPath, apiKey, model, prompt);

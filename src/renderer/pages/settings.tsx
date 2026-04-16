@@ -95,7 +95,7 @@ export function SettingsDialog() {
     localStorage.setItem("autoRefineLowConfidence", autoRefine ? "1" : "0")
     toast.success(t("settings.saved"), { duration: 1500 })
     setOpen(false)
-  }, [transcriptionKeys, autoRefine, t])
+  }, [transcriptionKeys, autoRefine, denoiseEnabled, t])
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
