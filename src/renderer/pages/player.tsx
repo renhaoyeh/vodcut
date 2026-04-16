@@ -430,7 +430,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
   // Subtitle editor state (A4)
   const [editingIdx, setEditingIdx] = useState<number | null>(null)
   const [editText, setEditText] = useState("")
-  const editInputRef = useRef<HTMLInputElement>(null)
+  const editInputRef = useRef<HTMLTextAreaElement>(null)
   const [retryingIdx, setRetryingIdx] = useState<number | null>(null)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIdxs, setSelectedIdxs] = useState<Set<number>>(() => new Set())
@@ -1041,7 +1041,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
   const srtVirtualizer = useVirtualizer({
     count: subtitles.length,
     getScrollElement: () => srtScrollRef.current,
-    estimateSize: () => 52,
+    estimateSize: () => 72,
     overscan: 10,
   })
 
@@ -1302,64 +1302,69 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                             {lowConfidence && (
                               <AlertTriangle className="size-3 text-orange-500" aria-label={t("player.lowConfidence") as string} />
                             )}
-                            <div className="ml-auto flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                              {lowConfidence && (
-                                <button
-                                  type="button"
-                                  className="rounded p-1.5 text-muted-foreground hover:bg-background hover:text-foreground disabled:opacity-50"
-                                  title={t("player.retranscribeSubtitle") as string}
-                                  disabled={retryingIdx === vItem.index}
-                                  onClick={(e) => { e.stopPropagation(); retranscribeSubtitle(vItem.index) }}
-                                >
-                                  {retryingIdx === vItem.index
-                                    ? <Loader2 className="size-3.5 animate-spin" />
-                                    : <RefreshCw className="size-3.5" />}
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                className="rounded p-1.5 text-muted-foreground hover:bg-background hover:text-foreground"
-                                title={t("player.editSubtitle") as string}
-                                onClick={(e) => { e.stopPropagation(); startEditSubtitle(vItem.index) }}
-                              >
-                                <Pencil className="size-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                className="rounded p-1.5 text-muted-foreground hover:bg-background hover:text-foreground"
-                                title={t("player.splitSubtitle") as string}
-                                onClick={(e) => { e.stopPropagation(); splitSubtitle(vItem.index) }}
-                              >
-                                <Split className="size-3.5" />
-                              </button>
-                              {vItem.index < subtitles.length - 1 && (
-                                <button
-                                  type="button"
-                                  className="rounded p-1.5 text-muted-foreground hover:bg-background hover:text-foreground"
-                                  title={t("player.mergeSubtitle") as string}
-                                  onClick={(e) => { e.stopPropagation(); mergeWithNext(vItem.index) }}
-                                >
-                                  <Merge className="size-3.5" />
-                                </button>
-                              )}
-                            </div>
                           </div>
                           {isEditing ? (
-                            <input
+                            <textarea
                               ref={editInputRef}
                               value={editText}
                               onChange={(e) => setEditText(e.target.value)}
                               onKeyDown={(e) => {
-                                if (e.key === "Enter") { e.preventDefault(); commitEditSubtitle() }
+                                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); commitEditSubtitle() }
                                 else if (e.key === "Escape") { e.preventDefault(); cancelEditSubtitle() }
                               }}
                               onBlur={commitEditSubtitle}
                               onClick={(e) => e.stopPropagation()}
-                              className="mt-0.5 w-full rounded border border-primary bg-background px-1 py-0.5 text-sm outline-none"
+                              rows={Math.max(2, Math.ceil(editText.length / 30))}
+                              className="mt-0.5 w-full resize-none rounded border border-primary bg-background px-2 py-1 text-sm outline-none"
                             />
                           ) : (
                             <p className="mt-0.5 text-sm">{sub.text}</p>
                           )}
+                          <div className="mt-1 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                            {lowConfidence && (
+                              <button
+                                type="button"
+                                className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+                                title={t("player.retranscribeSubtitle") as string}
+                                disabled={retryingIdx === vItem.index}
+                                onClick={(e) => { e.stopPropagation(); retranscribeSubtitle(vItem.index) }}
+                              >
+                                {retryingIdx === vItem.index
+                                  ? <Loader2 className="size-3.5 animate-spin" />
+                                  : <RefreshCw className="size-3.5" />}
+                                {t("player.retranscribeSubtitle")}
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                              title={t("player.editSubtitle") as string}
+                              onClick={(e) => { e.stopPropagation(); startEditSubtitle(vItem.index) }}
+                            >
+                              <Pencil className="size-3.5" />
+                              {t("player.editSubtitle")}
+                            </button>
+                            <button
+                              type="button"
+                              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                              title={t("player.splitSubtitle") as string}
+                              onClick={(e) => { e.stopPropagation(); splitSubtitle(vItem.index) }}
+                            >
+                              <Split className="size-3.5" />
+                              {t("player.splitSubtitle")}
+                            </button>
+                            {vItem.index < subtitles.length - 1 && (
+                              <button
+                                type="button"
+                                className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                                title={t("player.mergeSubtitle") as string}
+                                onClick={(e) => { e.stopPropagation(); mergeWithNext(vItem.index) }}
+                              >
+                                <Merge className="size-3.5" />
+                                {t("player.mergeSubtitle")}
+                              </button>
+                            )}
+                          </div>
                         </div>
                       )
                     })}
