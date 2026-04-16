@@ -428,9 +428,8 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
   activeClipRef.current = activeClip
 
   // Subtitle editor state (A4)
-  const [editingIdx, setEditingIdx] = useState<number | null>(null)
+  const [detailIdx, setDetailIdx] = useState<number | null>(null)
   const [editText, setEditText] = useState("")
-  const editInputRef = useRef<HTMLTextAreaElement>(null)
   const [retryingIdx, setRetryingIdx] = useState<number | null>(null)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIdxs, setSelectedIdxs] = useState<Set<number>>(() => new Set())
@@ -775,27 +774,21 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
     await window.electronAPI.saveSrt(projectId, subtitlesToSrt(next))
   }, [projectId])
 
-  const startEditSubtitle = useCallback((idx: number) => {
-    setEditingIdx(idx)
+  const openSubtitleDetail = useCallback((idx: number) => {
+    setDetailIdx(idx)
     setEditText(subtitlesRef.current[idx]?.text ?? "")
-    setTimeout(() => editInputRef.current?.focus(), 0)
   }, [])
 
   const commitEditSubtitle = useCallback(async () => {
-    if (editingIdx == null) return
+    if (detailIdx == null) return
     const next = [...subtitlesRef.current]
-    const cur = next[editingIdx]
-    if (!cur) { setEditingIdx(null); return }
+    const cur = next[detailIdx]
+    if (!cur) { setDetailIdx(null); return }
     // User-edited text is implicitly high-confidence — clear the flag.
-    next[editingIdx] = { ...cur, text: editText, confidence: undefined }
+    next[detailIdx] = { ...cur, text: editText, confidence: undefined }
     await persistSubtitles(next)
-    setEditingIdx(null)
-  }, [editingIdx, editText, persistSubtitles])
-
-  const cancelEditSubtitle = useCallback(() => {
-    setEditingIdx(null)
-    setEditText("")
-  }, [])
+    setDetailIdx(null)
+  }, [detailIdx, editText, persistSubtitles])
 
   const mergeWithNext = useCallback(async (idx: number) => {
     const cur = subtitlesRef.current
@@ -808,6 +801,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
     }
     const next = [...cur.slice(0, idx), merged, ...cur.slice(idx + 2)]
     await persistSubtitles(next)
+    setDetailIdx(null)
   }, [persistSubtitles])
 
   const splitSubtitle = useCallback(async (idx: number) => {
@@ -824,6 +818,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
     const right: Subtitle = { startMs: midMs, endMs: target.endMs, text: rightText, confidence: undefined }
     const next = [...cur.slice(0, idx), left, right, ...cur.slice(idx + 1)]
     await persistSubtitles(next)
+    setDetailIdx(null)
   }, [persistSubtitles])
 
   const retranscribeSubtitle = useCallback(async (idx: number) => {
@@ -847,6 +842,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
       if (!latest) return
       next[idx] = { ...latest, text: result.text, confidence: undefined }
       await persistSubtitles(next)
+      setDetailIdx(null)
       toast.success(t("player.retranscribeDone"))
     } catch (err) {
       toast.error((err as Error).message)
@@ -1041,7 +1037,7 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
   const srtVirtualizer = useVirtualizer({
     count: subtitles.length,
     getScrollElement: () => srtScrollRef.current,
-    estimateSize: () => 72,
+    estimateSize: () => 56,
     overscan: 10,
   })
 
@@ -1268,7 +1264,6 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                     {srtVirtualizer.getVirtualItems().map((vItem) => {
                       const sub = subtitles[vItem.index]
                       const active = vItem.index === activeSrtIdx
-                      const isEditing = editingIdx === vItem.index
                       const lowConfidence = typeof sub.confidence === "number" && sub.confidence < LOW_CONFIDENCE_THRESHOLD
                       const isSelected = selectMode && selectedIdxs.has(vItem.index)
                       return (
@@ -1283,7 +1278,6 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                             isSelected ? "bg-primary/15 border-l-2 border-l-primary" : ""
                           }`}
                           onClick={(e) => {
-                            if (isEditing) return
                             if (selectMode) { toggleSelectRow(vItem.index, e.shiftKey); return }
                             setActiveClip(null); seekToMs(sub.startMs)
                           }}
@@ -1302,69 +1296,18 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                             {lowConfidence && (
                               <AlertTriangle className="size-3 text-orange-500" aria-label={t("player.lowConfidence") as string} />
                             )}
-                          </div>
-                          {isEditing ? (
-                            <textarea
-                              ref={editInputRef}
-                              value={editText}
-                              onChange={(e) => setEditText(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); commitEditSubtitle() }
-                                else if (e.key === "Escape") { e.preventDefault(); cancelEditSubtitle() }
-                              }}
-                              onBlur={commitEditSubtitle}
-                              onClick={(e) => e.stopPropagation()}
-                              rows={Math.max(2, Math.ceil(editText.length / 30))}
-                              className="mt-0.5 w-full resize-none rounded border border-primary bg-background px-2 py-1 text-sm outline-none"
-                            />
-                          ) : (
-                            <p className="mt-0.5 text-sm">{sub.text}</p>
-                          )}
-                          <div className="mt-1 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                            {lowConfidence && (
+                            {!selectMode && (
                               <button
                                 type="button"
-                                className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
-                                title={t("player.retranscribeSubtitle") as string}
-                                disabled={retryingIdx === vItem.index}
-                                onClick={(e) => { e.stopPropagation(); retranscribeSubtitle(vItem.index) }}
+                                className="ml-auto rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
+                                title={t("player.editSubtitle") as string}
+                                onClick={(e) => { e.stopPropagation(); openSubtitleDetail(vItem.index) }}
                               >
-                                {retryingIdx === vItem.index
-                                  ? <Loader2 className="size-3.5 animate-spin" />
-                                  : <RefreshCw className="size-3.5" />}
-                                {t("player.retranscribeSubtitle")}
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
-                              title={t("player.editSubtitle") as string}
-                              onClick={(e) => { e.stopPropagation(); startEditSubtitle(vItem.index) }}
-                            >
-                              <Pencil className="size-3.5" />
-                              {t("player.editSubtitle")}
-                            </button>
-                            <button
-                              type="button"
-                              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
-                              title={t("player.splitSubtitle") as string}
-                              onClick={(e) => { e.stopPropagation(); splitSubtitle(vItem.index) }}
-                            >
-                              <Split className="size-3.5" />
-                              {t("player.splitSubtitle")}
-                            </button>
-                            {vItem.index < subtitles.length - 1 && (
-                              <button
-                                type="button"
-                                className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
-                                title={t("player.mergeSubtitle") as string}
-                                onClick={(e) => { e.stopPropagation(); mergeWithNext(vItem.index) }}
-                              >
-                                <Merge className="size-3.5" />
-                                {t("player.mergeSubtitle")}
+                                <Pencil className="size-3.5" />
                               </button>
                             )}
                           </div>
+                          <p className="mt-0.5 text-sm">{sub.text}</p>
                         </div>
                       )
                     })}
@@ -1616,6 +1559,72 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
               {t("player.saveVocabulary")}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Subtitle detail / edit dialog */}
+      <Dialog open={detailIdx != null} onOpenChange={(open) => { if (!open) setDetailIdx(null) }}>
+        <DialogContent className="max-w-lg">
+          {detailIdx != null && subtitles[detailIdx] && (() => {
+            const sub = subtitles[detailIdx]
+            const lowConfidence = typeof sub.confidence === "number" && sub.confidence < LOW_CONFIDENCE_THRESHOLD
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle>{t("player.editSubtitle")}</DialogTitle>
+                  <DialogDescription>
+                    {formatMs(sub.startMs)} – {formatMs(sub.endMs)}
+                    {lowConfidence && (
+                      <span className="ml-2 inline-flex items-center gap-1 text-orange-500">
+                        <AlertTriangle className="size-3.5" />
+                        {t("player.lowConfidence")}
+                      </span>
+                    )}
+                  </DialogDescription>
+                </DialogHeader>
+                <textarea
+                  value={editText}
+                  onChange={(e) => setEditText(e.target.value)}
+                  rows={Math.max(3, Math.ceil(editText.length / 40))}
+                  className="w-full resize-none rounded-md border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+                  autoFocus
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  {lowConfidence && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={retryingIdx === detailIdx}
+                      onClick={() => retranscribeSubtitle(detailIdx)}
+                    >
+                      {retryingIdx === detailIdx
+                        ? <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                        : <RefreshCw className="mr-1.5 size-3.5" />}
+                      {t("player.retranscribeSubtitle")}
+                    </Button>
+                  )}
+                  <Button variant="outline" size="sm" onClick={() => splitSubtitle(detailIdx)}>
+                    <Split className="mr-1.5 size-3.5" />
+                    {t("player.splitSubtitle")}
+                  </Button>
+                  {detailIdx < subtitles.length - 1 && (
+                    <Button variant="outline" size="sm" onClick={() => mergeWithNext(detailIdx)}>
+                      <Merge className="mr-1.5 size-3.5" />
+                      {t("player.mergeSubtitle")}
+                    </Button>
+                  )}
+                </div>
+                <DialogFooter>
+                  <Button variant="ghost" size="sm" onClick={() => setDetailIdx(null)}>
+                    {t("settings.cancel")}
+                  </Button>
+                  <Button size="sm" onClick={commitEditSubtitle}>
+                    {t("settings.save")}
+                  </Button>
+                </DialogFooter>
+              </>
+            )
+          })()}
         </DialogContent>
       </Dialog>
     </div>
