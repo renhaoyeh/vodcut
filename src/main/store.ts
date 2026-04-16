@@ -151,7 +151,6 @@ export function projectPaths(projectId: string) {
     analysisDir: path.join(dir, 'analysis'),
     analysisProgress: path.join(dir, 'analysis-progress.json'),
     progress: path.join(dir, 'transcription-progress.json'),
-    vocabulary: path.join(dir, 'vocabulary.json'),
     audioDenoised: path.join(dir, 'audio-clean.wav'),
   };
 }
@@ -290,24 +289,4 @@ export function registerStoreHandlers(): void {
     }
   });
 
-  // Vocabulary (per-project terms used to prime Whisper on re-transcription).
-  ipcMain.handle('store:readVocabulary', (_event, projectId: string) => {
-    const paths = projectPaths(projectId);
-    try {
-      const data = JSON.parse(fs.readFileSync(paths.vocabulary, 'utf8'));
-      return Array.isArray(data?.terms) ? data.terms : [];
-    } catch {
-      return [];
-    }
-  });
-
-  ipcMain.handle('store:saveVocabulary', (_event, projectId: string, terms: string[]) => {
-    const paths = projectPaths(projectId);
-    try {
-      fs.writeFileSync(paths.vocabulary, JSON.stringify({ terms }, null, 2), 'utf8');
-      return { success: true };
-    } catch (e) {
-      return { success: false, error: (e as Error).message };
-    }
-  });
 }

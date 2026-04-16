@@ -66,10 +66,6 @@ interface ElectronAPI {
   revealInFolder: (filePath: string) => Promise<{ success: boolean; error?: string }>;
   onExportProgress: (callback: (projectId: string, clipKey: string, percent: number) => void) => () => void;
 
-  // Vocabulary extraction (A2)
-  extractVocabulary: (projectId: string) => Promise<{ success: boolean; terms?: string[]; error?: string }>;
-  saveVocabulary: (projectId: string, terms: string[]) => Promise<{ success: boolean; error?: string }>;
-  readVocabulary: (projectId: string) => Promise<string[]>;
 }
 
 declare global {

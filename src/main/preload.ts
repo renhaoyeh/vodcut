@@ -69,10 +69,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('exporter:progress', listener);
   },
 
-  // Vocabulary extraction (A2)
-  extractVocabulary: (projectId: string) => ipcRenderer.invoke('analyzer:extractVocabulary', projectId),
-  saveVocabulary: (projectId: string, terms: string[]) => ipcRenderer.invoke('store:saveVocabulary', projectId, terms),
-  readVocabulary: (projectId: string) => ipcRenderer.invoke('store:readVocabulary', projectId),
   // Denoise (DeepFilterNet)
   isDenoiseAvailable: () => ipcRenderer.invoke('denoise:isAvailable'),
   getDenoiseEnabled: () => ipcRenderer.invoke('denoise:getEnabled'),

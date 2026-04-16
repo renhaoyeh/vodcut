@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from "react"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { useTranslation } from "react-i18next"
-import { ArrowLeft, Maximize, Minimize, Pause, Play, Loader2, Sparkles, ListVideo, Scissors, Volume2, VolumeX, Mic, FileText, ArrowDown, Pencil, Download, Copy, Wand2, AlertTriangle, RefreshCw } from "lucide-react"
+import { ArrowLeft, Maximize, Minimize, Pause, Play, Loader2, Sparkles, ListVideo, Scissors, Volume2, VolumeX, Mic, FileText, ArrowDown, Pencil, Download, Copy, AlertTriangle, RefreshCw } from "lucide-react"
 import { Button } from "@/renderer/components/ui/button"
 import { Separator } from "@/renderer/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/renderer/components/ui/select"
@@ -10,7 +10,6 @@ import { ScrollArea } from "@/renderer/components/ui/scroll-area"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/renderer/components/ui/dialog"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/renderer/components/ui/context-menu"
 import { Checkbox } from "@/renderer/components/ui/checkbox"
-import { Label } from "@/renderer/components/ui/label"
 import type { AnalysisData } from "@/main/store"
 import { toast } from "sonner"
 
@@ -438,11 +437,6 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
   const [exportBurnSubs, setExportBurnSubs] = useState(false)
   const [exportPrecise, setExportPrecise] = useState(true)
 
-  // Vocabulary / enhance transcription (A2)
-  const [vocabOpen, setVocabOpen] = useState(false)
-  const [vocabTerms, setVocabTerms] = useState<Array<{ term: string; selected: boolean }>>([])
-  const [vocabExtracting, setVocabExtracting] = useState(false)
-  const [vocabCustom, setVocabCustom] = useState("")
 
   const hideTimerRef = useRef<ReturnType<typeof setTimeout>>(null)
   const subtitlesRef = useRef<Subtitle[]>([])
@@ -874,47 +868,6 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
     }
   }, [projectId, t, exportBurnSubs, exportPrecise])
 
-  // ── Enhance transcription: vocabulary extraction (A2) ─────
-  const openVocabDialog = useCallback(async () => {
-    setVocabOpen(true)
-    setVocabExtracting(true)
-    try {
-      const existing = await window.electronAPI.readVocabulary(projectId)
-      // Kick off fresh extraction from current SRT.
-      const result = await window.electronAPI.extractVocabulary(projectId)
-      setVocabExtracting(false)
-      if (result.success && Array.isArray(result.terms)) {
-        const existingSet = new Set<string>(existing)
-        const merged: Array<{ term: string; selected: boolean }> = []
-        for (const t of result.terms) {
-          merged.push({ term: t, selected: existingSet.has(t) })
-        }
-        // Append any existing terms not re-discovered.
-        for (const ex of existing) {
-          if (!result.terms.includes(ex)) {
-            merged.push({ term: ex, selected: true })
-          }
-        }
-        setVocabTerms(merged)
-      } else {
-        // Extraction failed but still allow manual editing.
-        setVocabTerms(existing.map((term: string) => ({ term, selected: true })))
-        if (result.error) toast.error(result.error)
-      }
-    } catch (err) {
-      setVocabExtracting(false)
-      toast.error(String(err))
-    }
-  }, [projectId])
-
-  const saveVocabAndReTranscribe = useCallback(async () => {
-    const chosen = vocabTerms.filter((v) => v.selected).map((v) => v.term)
-    const custom = vocabCustom.split(/[、,\s\n]+/).map((s) => s.trim()).filter(Boolean)
-    const all = Array.from(new Set([...chosen, ...custom]))
-    await window.electronAPI.saveVocabulary(projectId, all)
-    setVocabOpen(false)
-    toast.info(t("player.vocabSavedPrompt"))
-  }, [projectId, vocabTerms, vocabCustom, t])
 
   const formatMs = (ms: number) => {
     const s = Math.floor(ms / 1000)
@@ -1125,19 +1078,6 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
 
             {panelTab === "srt" && (
               <div className="relative flex flex-1 flex-col overflow-hidden">
-                <div className="flex shrink-0 items-center gap-1.5 border-b px-3 py-1.5">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-8 text-xs"
-                    onClick={openVocabDialog}
-                    disabled={!hasSrt}
-                    title={t("player.enhanceTranscriptTooltip") as string}
-                  >
-                    <Wand2 className="mr-1.5 size-3.5" />
-                    {t("player.enhanceTranscript")}
-                  </Button>
-                </div>
                 <div
                   ref={srtScrollRef}
                   className="relative flex-1 overflow-y-auto"
@@ -1346,62 +1286,6 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
         </ResizablePanel>
       </ResizablePanelGroup>
 
-      {/* Vocabulary / Enhance transcription dialog (A2) */}
-      <Dialog open={vocabOpen} onOpenChange={setVocabOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{t("player.enhanceTranscript")}</DialogTitle>
-            <DialogDescription>{t("player.enhanceTranscriptDesc")}</DialogDescription>
-          </DialogHeader>
-          {vocabExtracting ? (
-            <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" />
-              {t("player.extractingVocabulary")}
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3">
-              <div className="max-h-64 overflow-y-auto rounded border px-2 py-1">
-                {vocabTerms.length === 0 ? (
-                  <div className="py-4 text-center text-xs text-muted-foreground">
-                    {t("player.noVocabularyFound")}
-                  </div>
-                ) : (
-                  vocabTerms.map((v, i) => (
-                    <label key={i} className="flex cursor-pointer items-center gap-2 py-1 text-sm">
-                      <Checkbox
-                        checked={v.selected}
-                        onCheckedChange={(checked) => {
-                          setVocabTerms((prev) => prev.map((p, pi) => pi === i ? { ...p, selected: checked === true } : p))
-                        }}
-                      />
-                      <span className={v.selected ? "" : "text-muted-foreground"}>{v.term}</span>
-                    </label>
-                  ))
-                )}
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">{t("player.additionalTerms")}</Label>
-                <textarea
-                  value={vocabCustom}
-                  onChange={(e) => setVocabCustom(e.target.value)}
-                  placeholder={t("player.additionalTermsPlaceholder") as string}
-                  className="mt-1 w-full rounded border bg-background px-2 py-1 text-sm outline-none focus:border-primary"
-                  rows={2}
-                />
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="ghost" size="sm" onClick={() => setVocabOpen(false)}>
-              {t("settings.cancel")}
-            </Button>
-            <Button size="sm" onClick={saveVocabAndReTranscribe} disabled={vocabExtracting}>
-              <Wand2 className="mr-1 size-3.5" />
-              {t("player.saveVocabulary")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Subtitle detail / edit dialog */}
       <Dialog open={detailIdx != null} onOpenChange={(open) => { if (!open) setDetailIdx(null) }}>

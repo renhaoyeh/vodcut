@@ -188,25 +188,15 @@ const PROMPT_MAX_CHARS = 200;
 const DEFAULT_PROMPT_SEED = '以下是繁體中文直播內容。';
 
 /**
- * Build a Whisper prompt from the tail of previously transcribed text + optional vocabulary.
+ * Build a Whisper prompt from the tail of previously transcribed text.
  * This helps Whisper carry context across chunk boundaries (most errors cluster there).
  */
-function buildChunkPrompt(priorSegments: SrtSegment[], vocabulary?: string): string {
-  const parts: string[] = [];
-  if (vocabulary && vocabulary.trim()) {
-    // Keep vocabulary section short — budget shared with rolling context.
-    parts.push(vocabulary.trim().slice(0, 80));
-  }
-
+function buildChunkPrompt(priorSegments: SrtSegment[]): string {
   if (priorSegments.length === 0) {
-    parts.push(DEFAULT_PROMPT_SEED);
-  } else {
-    // Use the last N chars of prior transcription as rolling context.
-    const joined = priorSegments.map((s) => s.text).join('');
-    parts.push(joined.slice(-PROMPT_MAX_CHARS));
+    return DEFAULT_PROMPT_SEED;
   }
-
-  return parts.join(' ').slice(-PROMPT_MAX_CHARS);
+  const joined = priorSegments.map((s) => s.text).join('');
+  return joined.slice(-PROMPT_MAX_CHARS);
 }
 
 async function uploadToGroq(
@@ -264,20 +254,8 @@ export async function retranscribeRangeSegments(
   const duration = chunkEndSec - chunkStartSec;
   if (duration <= 0) return { success: false, error: 'Invalid time range.' };
 
-  let vocabulary: string | undefined;
-  try {
-    const raw = fs.readFileSync(paths.vocabulary, 'utf8');
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed?.terms)) {
-      vocabulary = (parsed.terms as string[]).filter(Boolean).join('、');
-    }
-  } catch { /* no vocabulary */ }
-
-  const promptParts: string[] = [];
-  if (vocabulary) promptParts.push(vocabulary.slice(0, 80));
   const ctx = `${contextBefore}${contextAfter}`.trim();
-  promptParts.push(ctx || DEFAULT_PROMPT_SEED);
-  const prompt = promptParts.join(' ').slice(-PROMPT_MAX_CHARS);
+  const prompt = (ctx || DEFAULT_PROMPT_SEED).slice(-PROMPT_MAX_CHARS);
 
   const tmpDir = app.getPath('temp');
   const chunkPath = path.join(tmpDir, `vodcut-groq-retry-range-${projectId}-${Date.now()}.wav`);
@@ -339,20 +317,8 @@ export async function retranscribeSingleSegment(
   const duration = endSec - startSec;
   if (duration <= 0) return { success: false, error: 'Invalid time range.' };
 
-  let vocabulary: string | undefined;
-  try {
-    const raw = fs.readFileSync(paths.vocabulary, 'utf8');
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed?.terms)) {
-      vocabulary = (parsed.terms as string[]).filter(Boolean).join('、');
-    }
-  } catch { /* no vocabulary */ }
-
-  const promptParts: string[] = [];
-  if (vocabulary) promptParts.push(vocabulary.slice(0, 80));
   const ctx = `${contextBefore}${contextAfter}`.trim();
-  promptParts.push(ctx || DEFAULT_PROMPT_SEED);
-  const prompt = promptParts.join(' ').slice(-PROMPT_MAX_CHARS);
+  const prompt = (ctx || DEFAULT_PROMPT_SEED).slice(-PROMPT_MAX_CHARS);
 
   const tmpDir = app.getPath('temp');
   const chunkPath = path.join(tmpDir, `vodcut-groq-retry-${projectId}-${Date.now()}.wav`);
@@ -458,16 +424,6 @@ export async function transcribeWithGroq(
 
     const tmpDir = app.getPath('temp');
 
-    // Optional per-project vocabulary (A2). Read once at start; updated between retries.
-    let vocabulary: string | undefined;
-    try {
-      const raw = fs.readFileSync(paths.vocabulary, 'utf8');
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed?.terms)) {
-        vocabulary = (parsed.terms as string[]).filter(Boolean).join('、');
-      }
-    } catch { /* no vocabulary yet */ }
-
     while (c < numChunks) {
       const range = chunkRanges[c];
       const startSec = range.startSec;
@@ -484,7 +440,7 @@ export async function transcribeWithGroq(
       const keyIndex = c % apiKeys.length;
       const apiKey = apiKeys[keyIndex];
       // Build rolling-context prompt from prior chunks (A1)
-      const prompt = buildChunkPrompt(allSegments, vocabulary);
+      const prompt = buildChunkPrompt(allSegments);
       console.log(`[whisper] chunk ${c + 1}/${numChunks} [${startSec.toFixed(1)}s-${range.endSec.toFixed(1)}s] using key #${keyIndex + 1} prompt=${prompt.length}ch`);
       const result = await uploadToGroq(chunkPath, apiKey, model, prompt);
 
