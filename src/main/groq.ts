@@ -25,10 +25,10 @@ const AUTO_REFINE_GAP_TOLERANCE = 1;
 const SILENCE_THRESH_DB = -35;
 const SILENCE_MIN_DURATION = 0.5; // seconds
 
-// Max characters per subtitle line. Segments longer than this are split.
+// Max characters per subtitle line when grouping words into segments.
 const MAX_SUBTITLE_CHARS = 18;
-// Punctuation marks where we prefer to split long segments (Chinese + common).
-const SPLIT_PUNCTUATION = /[，。！？、；：…？！，,\.!\?;:]/;
+// Silence gap (seconds) between words that forces a subtitle break.
+const WORD_GAP_BREAK_SEC = 0.5;
 
 interface SilenceGap {
   startSec: number;
@@ -160,73 +160,46 @@ function buildChunkRanges(totalSec: number, silences: SilenceGap[]): ChunkRange[
 }
 
 /**
- * Split segments that exceed MAX_SUBTITLE_CHARS into shorter subtitle lines.
- * Prefers splitting at punctuation; falls back to even character splits.
- * Timestamps are distributed proportionally by character count.
+ * Group word-level timestamps into subtitle segments of at most
+ * MAX_SUBTITLE_CHARS. A new segment is also started when the gap between
+ * consecutive words exceeds WORD_GAP_BREAK_SEC (a natural speech pause).
+ *
+ * @param words  - Whisper word-level timestamps (with offset already applied)
+ * @param confidence - optional avg_logprob to attach to every produced segment
  */
-function splitLongSegments(segments: SrtSegment[]): SrtSegment[] {
-  const out: SrtSegment[] = [];
-  for (const seg of segments) {
-    const text = seg.text.trim();
-    if (text.length <= MAX_SUBTITLE_CHARS) {
-      out.push(seg);
-      continue;
+function groupWordsIntoSegments(
+  words: Array<{ word: string; startMs: number; endMs: number }>,
+  confidence?: number,
+): SrtSegment[] {
+  if (words.length === 0) return [];
+
+  const segments: SrtSegment[] = [];
+  let buf = words[0].word;
+  let segStart = words[0].startMs;
+  let segEnd = words[0].endMs;
+
+  for (let i = 1; i < words.length; i++) {
+    const w = words[i];
+    const gap = (w.startMs - segEnd) / 1000; // seconds
+    const wouldExceed = (buf + w.word).length > MAX_SUBTITLE_CHARS;
+
+    if (wouldExceed || gap >= WORD_GAP_BREAK_SEC) {
+      // Flush current buffer
+      segments.push({ index: 0, startMs: segStart, endMs: segEnd, text: buf.trim(), confidence });
+      buf = w.word;
+      segStart = w.startMs;
+    } else {
+      buf += w.word;
     }
-    const pieces = splitText(text);
-    const totalChars = text.length;
-    const totalMs = seg.endMs - seg.startMs;
-    let cursor = seg.startMs;
-    for (let i = 0; i < pieces.length; i++) {
-      const piece = pieces[i];
-      const durationMs = Math.round((piece.length / totalChars) * totalMs);
-      const endMs = i === pieces.length - 1 ? seg.endMs : cursor + durationMs;
-      out.push({
-        index: 0, // reindexed by caller
-        startMs: cursor,
-        endMs,
-        text: piece,
-        confidence: seg.confidence,
-      });
-      cursor = endMs;
-    }
+    segEnd = w.endMs;
   }
-  // Reindex
-  for (let i = 0; i < out.length; i++) out[i].index = i + 1;
-  return out;
-}
-
-/**
- * Split a long text into pieces of at most MAX_SUBTITLE_CHARS.
- * Greedy: accumulate characters until the limit, then break at the last
- * punctuation position within the piece. If there's no punctuation, hard-break
- * at MAX_SUBTITLE_CHARS.
- */
-function splitText(text: string): string[] {
-  if (text.length <= MAX_SUBTITLE_CHARS) return [text];
-
-  const result: string[] = [];
-  let remaining = text;
-
-  while (remaining.length > MAX_SUBTITLE_CHARS) {
-    const window = remaining.slice(0, MAX_SUBTITLE_CHARS);
-    // Find the last punctuation position within the window (split after it)
-    let splitAt = -1;
-    for (let i = window.length - 1; i >= 0; i--) {
-      if (SPLIT_PUNCTUATION.test(window[i])) {
-        splitAt = i + 1; // keep the punctuation with the left piece
-        break;
-      }
-    }
-    // No punctuation found — hard-break at the limit
-    if (splitAt <= 0) splitAt = MAX_SUBTITLE_CHARS;
-
-    const piece = remaining.slice(0, splitAt).trim();
-    if (piece) result.push(piece);
-    remaining = remaining.slice(splitAt).trim();
+  // Flush remaining
+  if (buf.trim()) {
+    segments.push({ index: 0, startMs: segStart, endMs: segEnd, text: buf.trim(), confidence });
   }
-  if (remaining) result.push(remaining);
 
-  return result;
+  for (let i = 0; i < segments.length; i++) segments[i].index = i + 1;
+  return segments;
 }
 
 function extractChunk(audioPath: string, startSec: number, durationSec: number, outPath: string): Promise<void> {
@@ -254,8 +227,15 @@ interface GroqSegment {
   avg_logprob?: number;
 }
 
+interface GroqWord {
+  word: string;
+  start: number;
+  end: number;
+}
+
 interface GroqResponse {
   segments: GroqSegment[];
+  words?: GroqWord[];
 }
 
 /** Whisper `prompt` parameter has a 244-token limit. Keep well under it. */
@@ -298,6 +278,7 @@ async function uploadToGroq(
         model,
         language: 'zh',
         response_format: 'verbose_json',
+        timestamp_granularities: ['segment', 'word'],
         temperature: 0,
         ...(prompt ? { prompt } : {}),
       })
@@ -361,29 +342,42 @@ export async function retranscribeRangeSegments(
     const result = await uploadToGroq(chunkPath, apiKey, model, prompt);
 
     const offsetMs = Math.round(chunkStartSec * 1000);
-    const out: Array<{ startMs: number; endMs: number; text: string }> = [];
-    for (const seg of result.segments) {
-      const segStartMs = Math.round(seg.start * 1000) + offsetMs;
-      const segEndMs = Math.round(seg.end * 1000) + offsetMs;
-      // Drop segments that fall entirely outside the requested range (from padding).
-      if (segEndMs <= startMs || segStartMs >= endMs) continue;
-      const text = s2tw(seg.text.trim()).trim();
-      if (!text) continue;
-      out.push({
-        startMs: Math.max(startMs, segStartMs),
-        endMs: Math.min(endMs, segEndMs),
+    let out: Array<{ startMs: number; endMs: number; text: string }>;
+
+    if (result.words && result.words.length > 0) {
+      // Use word-level timestamps for accurate subtitle boundaries
+      const words = result.words
+        .map((w) => ({
+          word: s2tw(w.word),
+          startMs: Math.round(w.start * 1000) + offsetMs,
+          endMs: Math.round(w.end * 1000) + offsetMs,
+        }))
+        .filter((w) => w.endMs > startMs && w.startMs < endMs); // within range
+      const grouped = groupWordsIntoSegments(words);
+      out = grouped.map(({ startMs: s, endMs: e, text }) => ({
+        startMs: Math.max(startMs, s),
+        endMs: Math.min(endMs, e),
         text,
-      });
+      }));
+    } else {
+      // Fallback: segment-level
+      out = [];
+      for (const seg of result.segments) {
+        const segStartMs = Math.round(seg.start * 1000) + offsetMs;
+        const segEndMs = Math.round(seg.end * 1000) + offsetMs;
+        if (segEndMs <= startMs || segStartMs >= endMs) continue;
+        const text = s2tw(seg.text.trim()).trim();
+        if (!text) continue;
+        out.push({
+          startMs: Math.max(startMs, segStartMs),
+          endMs: Math.min(endMs, segEndMs),
+          text,
+        });
+      }
     }
 
     if (out.length === 0) return { success: false, error: 'No speech detected in range.' };
-
-    // Split long segments into shorter subtitle lines
-    const asSrt: SrtSegment[] = out.map((s, i) => ({ index: i + 1, ...s }));
-    const split = splitLongSegments(asSrt);
-    const finalOut = split.map(({ startMs, endMs, text }) => ({ startMs, endMs, text }));
-
-    return { success: true, segments: finalOut };
+    return { success: true, segments: out };
   } catch (err) {
     return { success: false, error: (err as Error).message };
   } finally {
@@ -567,14 +561,38 @@ export async function transcribeWithGroq(
       try { fs.unlinkSync(chunkPath); } catch {}
 
       const offsetMs = startSec * 1000;
-      for (const seg of result.segments) {
-        allSegments.push({
-          index: segIdx++,
-          startMs: Math.round(seg.start * 1000) + offsetMs,
-          endMs: Math.round(seg.end * 1000) + offsetMs,
-          text: s2tw(seg.text.trim()),
-          confidence: typeof seg.avg_logprob === 'number' ? seg.avg_logprob : undefined,
-        });
+
+      if (result.words && result.words.length > 0) {
+        // Word-level timestamps available — group into short subtitle lines
+        // with real speech timing boundaries.
+        const words = result.words.map((w) => ({
+          word: s2tw(w.word),
+          startMs: Math.round(w.start * 1000) + offsetMs,
+          endMs: Math.round(w.end * 1000) + offsetMs,
+        }));
+        // Compute an average confidence from the segment-level logprobs.
+        const logprobs = result.segments
+          .map((s) => s.avg_logprob)
+          .filter((v): v is number => typeof v === 'number');
+        const avgConf = logprobs.length > 0
+          ? logprobs.reduce((a, b) => a + b, 0) / logprobs.length
+          : undefined;
+        const grouped = groupWordsIntoSegments(words, avgConf);
+        for (const seg of grouped) {
+          seg.index = segIdx++;
+          allSegments.push(seg);
+        }
+      } else {
+        // Fallback: no word timestamps, use segment-level as before
+        for (const seg of result.segments) {
+          allSegments.push({
+            index: segIdx++,
+            startMs: Math.round(seg.start * 1000) + offsetMs,
+            endMs: Math.round(seg.end * 1000) + offsetMs,
+            text: s2tw(seg.text.trim()),
+            confidence: typeof seg.avg_logprob === 'number' ? seg.avg_logprob : undefined,
+          });
+        }
       }
       c++;
 
@@ -636,14 +654,11 @@ export async function transcribeWithGroq(
 
     win?.webContents.send('whisper:progress', projectId, 100);
 
-    // Split long subtitle segments into shorter, readable lines.
-    const finalSegments = splitLongSegments(allSegments);
-
-    const srtContent = segmentsToSrt(finalSegments);
+    const srtContent = segmentsToSrt(allSegments);
     fs.writeFileSync(paths.srt, srtContent, 'utf8');
 
     // Save confidence-aware segments.json (SRT can't carry metadata).
-    writeProjectFile(paths.segments, finalSegments);
+    writeProjectFile(paths.segments, allSegments);
 
     // Also save a copy next to the video
     const videoDir = path.dirname(project.filePath);
@@ -655,7 +670,7 @@ export async function transcribeWithGroq(
 
     updateProject(projectId, { status: 'completed' });
 
-    return { success: true, srtPath: paths.srt, segments: finalSegments };
+    return { success: true, srtPath: paths.srt, segments: allSegments };
   } catch (err) {
     return { success: false, error: (err as Error).message };
   }
