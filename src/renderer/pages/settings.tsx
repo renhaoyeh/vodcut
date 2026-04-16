@@ -14,7 +14,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/renderer/components/ui/dialog"
-import { Settings, Plus, Trash2 } from "lucide-react"
+import { Settings, Plus, Trash2, Volume2 } from "lucide-react"
 import { toast } from "sonner"
 import type { RateLimitInfo } from "@/main/store"
 
@@ -55,6 +55,8 @@ export function SettingsDialog() {
   const [transcriptionKeys, setTranscriptionKeys] = useState<string[]>([])
   const [rateLimits, setRateLimits] = useState<Record<string, RateLimitInfo>>({})
   const [autoRefine, setAutoRefine] = useState(true)
+  const [denoiseEnabled, setDenoiseEnabled] = useState(false)
+  const [denoiseAvailable, setDenoiseAvailable] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -63,6 +65,8 @@ export function SettingsDialog() {
     })
     window.electronAPI.getRateLimits().then(setRateLimits)
     setAutoRefine(localStorage.getItem("autoRefineLowConfidence") !== "0")
+    window.electronAPI.getDenoiseEnabled().then(setDenoiseEnabled)
+    window.electronAPI.isDenoiseAvailable().then(setDenoiseAvailable)
   }, [open])
 
   const updateKey = useCallback((index: number, value: string) => {
@@ -87,6 +91,7 @@ export function SettingsDialog() {
   const handleSave = useCallback(async () => {
     const cleanedKeys = transcriptionKeys.map(k => k.trim()).filter(Boolean)
     await window.electronAPI.setTranscriptionApiKeys(cleanedKeys)
+    await window.electronAPI.setDenoiseEnabled(denoiseEnabled)
     localStorage.setItem("autoRefineLowConfidence", autoRefine ? "1" : "0")
     toast.success(t("settings.saved"), { duration: 1500 })
     setOpen(false)
@@ -152,6 +157,28 @@ export function SettingsDialog() {
               <div className="space-y-0.5">
                 <div className="text-sm">{t("settings.autoRefineTitle")}</div>
                 <p className="text-xs text-muted-foreground">{t("settings.autoRefineHelp")}</p>
+              </div>
+            </label>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-sm">{t("settings.denoiseLabel")}</Label>
+            <label className="flex items-start gap-2 rounded-md border p-2.5 cursor-pointer hover:bg-muted/40">
+              <Checkbox
+                checked={denoiseEnabled}
+                onCheckedChange={(v) => setDenoiseEnabled(v === true)}
+                className="mt-0.5"
+                disabled={!denoiseAvailable}
+              />
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-1.5 text-sm">
+                  <Volume2 className="size-3.5" />
+                  {t("settings.denoiseTitle")}
+                </div>
+                <p className="text-xs text-muted-foreground">{t("settings.denoiseHelp")}</p>
+                {!denoiseAvailable && (
+                  <p className="text-xs text-orange-500">{t("settings.denoiseNotInstalled")}</p>
+                )}
               </div>
             </label>
           </div>

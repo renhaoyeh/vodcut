@@ -6,6 +6,7 @@ import { plugins } from './webpack.plugins';
 export const mainConfig: Configuration = {
   externals: {
     'ffmpeg-static': 'commonjs2 ffmpeg-static',
+    'deep-filter-static': 'commonjs2 deep-filter-static',
     'groq-sdk': 'commonjs2 groq-sdk',
     'opencc-js': 'commonjs2 opencc-js',
   },

@@ -24,13 +24,18 @@
     "rateLimitNoData": "No usage data yet (updates after API use)",
     "autoRefineLabel": "Transcription refinement",
     "autoRefineTitle": "Auto-refine low-confidence segments",
-    "autoRefineHelp": "After transcription completes, automatically re-transcribe segments Whisper was unsure about, using surrounding subtitles as prompt context. Uses extra API quota."
+    "autoRefineHelp": "After transcription completes, automatically re-transcribe segments Whisper was unsure about, using surrounding subtitles as prompt context. Uses extra API quota.",
+    "denoiseLabel": "Audio denoising",
+    "denoiseTitle": "Denoise before transcription (DeepFilterNet)",
+    "denoiseHelp": "Remove background noise (music, game sounds, keyboard clicks) before sending audio to Whisper. Significantly improves transcription accuracy for noisy recordings.",
+    "denoiseNotInstalled": "DeepFilter binary not found. Run npm install to download it."
   },
   "player": {
     "transcribe": "Transcribe",
     "retranscribe": "Re-transcribe",
     "resumeTranscribe": "Resume ({{current}}/{{total}})",
     "transcribeNoKey": "Please set Groq Whisper API Key in Settings first",
+    "denoising": "Denoising audio (DeepFilterNet)...",
     "convertingAudio": "Converting audio...",
     "recognizing": "Recognizing...",
     "detectingSilence": "Detecting silence gaps...",

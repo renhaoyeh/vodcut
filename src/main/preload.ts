@@ -73,6 +73,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   extractVocabulary: (projectId: string) => ipcRenderer.invoke('analyzer:extractVocabulary', projectId),
   saveVocabulary: (projectId: string, terms: string[]) => ipcRenderer.invoke('store:saveVocabulary', projectId, terms),
   readVocabulary: (projectId: string) => ipcRenderer.invoke('store:readVocabulary', projectId),
+  // Denoise (DeepFilterNet)
+  isDenoiseAvailable: () => ipcRenderer.invoke('denoise:isAvailable'),
+  getDenoiseEnabled: () => ipcRenderer.invoke('denoise:getEnabled'),
+  setDenoiseEnabled: (enabled: boolean) => ipcRenderer.invoke('denoise:setEnabled', enabled),
+
   onWhisperProgress: (callback: (projectId: string, percent: number) => void) => {
     const listener = (_event: any, projectId: string, percent: number) => callback(projectId, percent);
     ipcRenderer.on('whisper:progress', listener);
