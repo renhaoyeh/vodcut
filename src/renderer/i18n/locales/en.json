@@ -58,8 +58,6 @@
     "clearClip": "✕ Clip",
     "lowConfidence": "Low confidence, please review",
     "editSubtitle": "Edit subtitle",
-    "splitSubtitle": "Split into two",
-    "mergeSubtitle": "Merge with next",
     "retranscribeSubtitle": "Re-transcribe this segment",
     "retranscribeDone": "Segment re-transcribed",
     "retranscribeFailed": "Re-transcription failed",

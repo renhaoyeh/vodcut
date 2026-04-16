@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from "react"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { useTranslation } from "react-i18next"
-import { ArrowLeft, Maximize, Minimize, Pause, Play, Loader2, Sparkles, ListVideo, Scissors, Volume2, VolumeX, Mic, FileText, ArrowDown, Pencil, Download, Copy, Wand2, Split, Merge, AlertTriangle, RefreshCw, ListChecks, Check, X } from "lucide-react"
+import { ArrowLeft, Maximize, Minimize, Pause, Play, Loader2, Sparkles, ListVideo, Scissors, Volume2, VolumeX, Mic, FileText, ArrowDown, Pencil, Download, Copy, Wand2, AlertTriangle, RefreshCw, ListChecks, Check, X } from "lucide-react"
 import { Button } from "@/renderer/components/ui/button"
 import { Separator } from "@/renderer/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/renderer/components/ui/select"
@@ -790,37 +790,6 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
     setDetailIdx(null)
   }, [detailIdx, editText, persistSubtitles])
 
-  const mergeWithNext = useCallback(async (idx: number) => {
-    const cur = subtitlesRef.current
-    if (idx < 0 || idx >= cur.length - 1) return
-    const merged: Subtitle = {
-      startMs: cur[idx].startMs,
-      endMs: cur[idx + 1].endMs,
-      text: `${cur[idx].text}${cur[idx].text.endsWith(" ") ? "" : ""}${cur[idx + 1].text}`.trim(),
-      confidence: undefined,
-    }
-    const next = [...cur.slice(0, idx), merged, ...cur.slice(idx + 2)]
-    await persistSubtitles(next)
-    setDetailIdx(null)
-  }, [persistSubtitles])
-
-  const splitSubtitle = useCallback(async (idx: number) => {
-    const cur = subtitlesRef.current
-    const target = cur[idx]
-    if (!target || target.text.length < 2) return
-    // Split text at middle char; split time proportionally.
-    const mid = Math.floor(target.text.length / 2)
-    const leftText = target.text.slice(0, mid).trim()
-    const rightText = target.text.slice(mid).trim()
-    if (!leftText || !rightText) return
-    const midMs = target.startMs + Math.round((target.endMs - target.startMs) * (mid / target.text.length))
-    const left: Subtitle = { startMs: target.startMs, endMs: midMs, text: leftText, confidence: undefined }
-    const right: Subtitle = { startMs: midMs, endMs: target.endMs, text: rightText, confidence: undefined }
-    const next = [...cur.slice(0, idx), left, right, ...cur.slice(idx + 1)]
-    await persistSubtitles(next)
-    setDetailIdx(null)
-  }, [persistSubtitles])
-
   const retranscribeSubtitle = useCallback(async (idx: number) => {
     const cur = subtitlesRef.current
     const target = cur[idx]
@@ -1601,16 +1570,6 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                         ? <Loader2 className="mr-1.5 size-3.5 animate-spin" />
                         : <RefreshCw className="mr-1.5 size-3.5" />}
                       {t("player.retranscribeSubtitle")}
-                    </Button>
-                  )}
-                  <Button variant="outline" size="sm" onClick={() => splitSubtitle(detailIdx)}>
-                    <Split className="mr-1.5 size-3.5" />
-                    {t("player.splitSubtitle")}
-                  </Button>
-                  {detailIdx < subtitles.length - 1 && (
-                    <Button variant="outline" size="sm" onClick={() => mergeWithNext(detailIdx)}>
-                      <Merge className="mr-1.5 size-3.5" />
-                      {t("player.mergeSubtitle")}
                     </Button>
                   )}
                 </div>

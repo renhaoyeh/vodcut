@@ -58,8 +58,6 @@
     "clearClip": "✕ 片段",
     "lowConfidence": "辨識信心低,建議檢查",
     "editSubtitle": "編輯字幕",
-    "splitSubtitle": "切分為兩行",
-    "mergeSubtitle": "與下一行合併",
     "retranscribeSubtitle": "重新辨識這一段",
     "retranscribeDone": "已重新辨識",
     "retranscribeFailed": "重新辨識失敗",
