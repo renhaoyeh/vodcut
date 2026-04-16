@@ -5,7 +5,8 @@ import path from 'path';
 import fs from 'fs';
 import { getProjectById, updateProject, projectPaths } from './store';
 
-const ffmpegPath = path.join(process.cwd(), 'node_modules', 'ffmpeg-static', 'ffmpeg.exe');
+// ffmpeg-static exports the absolute path to the platform-specific binary
+const ffmpegPath: string = require('ffmpeg-static');
 
 /**
  * Write a temporary ffmpeg concat-style file list to pass Unicode paths safely.
