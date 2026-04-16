@@ -9,7 +9,8 @@ import * as OpenCC from 'opencc-js';
 
 const s2tw: (text: string) => string = OpenCC.Converter({ from: 'cn', to: 'twp' });
 
-const ffmpegPath = path.join(process.cwd(), 'node_modules', 'ffmpeg-static', 'ffmpeg.exe');
+// ffmpeg-static exports the absolute path to the platform-specific binary
+const ffmpegPath: string = require('ffmpeg-static');
 
 // Max chunk duration in seconds (~5 min, well under 25MB WAV limit)
 const MAX_CHUNK_SEC = 300;

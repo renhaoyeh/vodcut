@@ -5,7 +5,8 @@ import os from 'os';
 import { spawn } from 'child_process';
 import { getProjectById, projectPaths } from './store';
 
-const ffmpegPath = path.join(process.cwd(), 'node_modules', 'ffmpeg-static', 'ffmpeg.exe');
+// ffmpeg-static exports the absolute path to the platform-specific binary
+const ffmpegPath: string = require('ffmpeg-static');
 
 export interface ExportClipOptions {
   /** Burn subtitles into the video (requires re-encoding, therefore `precise`). */
