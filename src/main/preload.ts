@@ -62,6 +62,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Clip export (C1/C2)
   exportClip: (projectId: string, clip: { title: string; startMs: number; endMs: number }, options: { burnSubtitles: boolean; precise: boolean }) =>
     ipcRenderer.invoke('exporter:exportClip', projectId, clip, options),
+  exportFcpxmlRoughCut: (
+    projectId: string,
+    clips: Array<{ title: string; reason?: string; startMs: number; endMs: number }>,
+  ) => ipcRenderer.invoke('fcpxml:exportRoughCut', projectId, clips),
   revealInFolder: (filePath: string) => ipcRenderer.invoke('exporter:revealInFolder', filePath),
   onExportProgress: (callback: (projectId: string, clipKey: string, percent: number) => void) => {
     const listener = (_event: any, projectId: string, clipKey: string, percent: number) => callback(projectId, clipKey, percent);
