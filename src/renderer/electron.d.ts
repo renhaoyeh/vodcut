@@ -63,6 +63,10 @@ interface ElectronAPI {
     clip: { title: string; startMs: number; endMs: number },
     options: { burnSubtitles: boolean; precise: boolean },
   ) => Promise<{ success: boolean; outputPath?: string; error?: string }>;
+  exportFcpxmlRoughCut: (
+    projectId: string,
+    clips: Array<{ title: string; reason?: string; startMs: number; endMs: number }>,
+  ) => Promise<{ success: boolean; outputPath?: string; error?: string }>;
   revealInFolder: (filePath: string) => Promise<{ success: boolean; error?: string }>;
   onExportProgress: (callback: (projectId: string, clipKey: string, percent: number) => void) => () => void;
 

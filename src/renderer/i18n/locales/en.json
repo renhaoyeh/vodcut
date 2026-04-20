@@ -68,7 +68,10 @@
     "exportClipTooltip": "Export this clip as MP4",
     "exportBurnSubtitles": "Burn subtitles",
     "exportBurnSubtitlesTooltip": "Burn subtitles into the video (slower, but always visible)",
+    "exportFcpxml": "Rough cut (FCPXML)",
+    "exportFcpxmlTooltip": "Export all clips as an FCPXML rough-cut timeline, ready to open in DaVinci Resolve for fine editing. Zero re-encoding.",
     "clipExported": "Exported: {{path}}",
+    "fcpxmlExported": "FCPXML exported: {{path}}",
     "revealInFolder": "Open folder"
   }
 }

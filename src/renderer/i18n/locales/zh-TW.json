@@ -68,7 +68,10 @@
     "exportClipTooltip": "把此剪輯匯出為 MP4",
     "exportBurnSubtitles": "燒字幕",
     "exportBurnSubtitlesTooltip": "把字幕燒進影片(較慢,但字幕永遠顯示)",
+    "exportFcpxml": "初剪 (FCPXML)",
+    "exportFcpxmlTooltip": "把所有剪輯輸出成 FCPXML 初剪時間軸,用 DaVinci Resolve 開啟後可直接精修。完全不重新編碼。",
     "clipExported": "已匯出:{{path}}",
+    "fcpxmlExported": "FCPXML 已匯出:{{path}}",
     "revealInFolder": "開啟資料夾"
   }
 }

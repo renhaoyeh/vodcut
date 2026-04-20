@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from "react"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { useTranslation } from "react-i18next"
-import { ArrowLeft, Maximize, Minimize, Pause, Play, Loader2, Sparkles, ListVideo, Scissors, Volume2, VolumeX, Mic, FileText, ArrowDown, Pencil, Download, Copy, AlertTriangle, RefreshCw } from "lucide-react"
+import { ArrowLeft, Maximize, Minimize, Pause, Play, Loader2, Sparkles, ListVideo, Scissors, Volume2, VolumeX, Mic, FileText, ArrowDown, Pencil, Download, Copy, AlertTriangle, RefreshCw, FileVideo } from "lucide-react"
 import { Button } from "@/renderer/components/ui/button"
 import { Separator } from "@/renderer/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/renderer/components/ui/select"
@@ -868,6 +868,32 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
     }
   }, [projectId, t, exportBurnSubs, exportPrecise])
 
+  const [exportingFcpxml, setExportingFcpxml] = useState(false)
+  const exportFcpxmlRoughCut = useCallback(async () => {
+    if (!analysis || analysis.clips.length === 0) return
+    setExportingFcpxml(true)
+    try {
+      const result = await window.electronAPI.exportFcpxmlRoughCut(
+        projectId,
+        analysis.clips.map((c) => ({ title: c.title, reason: c.reason, startMs: c.startMs, endMs: c.endMs })),
+      )
+      if (result.success && result.outputPath) {
+        toast.success(t("player.fcpxmlExported", { path: result.outputPath }), {
+          action: {
+            label: t("player.revealInFolder"),
+            onClick: () => window.electronAPI.revealInFolder(result.outputPath),
+          },
+        })
+      } else {
+        toast.error(result.error ?? "FCPXML export failed")
+      }
+    } catch (err) {
+      toast.error(String(err))
+    } finally {
+      setExportingFcpxml(false)
+    }
+  }, [projectId, analysis, t])
+
 
   const formatMs = (ms: number) => {
     const s = Math.floor(ms / 1000)
@@ -1211,6 +1237,16 @@ export function PlayerPage({ projectId, filePath, fileName, hasSrt: initialHasSr
                       <Scissors className="size-3.5 text-muted-foreground" />
                       <span className="text-xs font-medium text-muted-foreground">{t("player.tabClips", { count: analysis.clips.length })}</span>
                       <div className="ml-auto flex items-center gap-2">
+                        <button
+                          type="button"
+                          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+                          title={t("player.exportFcpxmlTooltip") as string}
+                          onClick={exportFcpxmlRoughCut}
+                          disabled={exportingFcpxml || analysis.clips.length === 0}
+                        >
+                          {exportingFcpxml ? <Loader2 className="size-3 animate-spin" /> : <FileVideo className="size-3" />}
+                          {t("player.exportFcpxml")}
+                        </button>
                         <label
                           className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer"
                           title={t("player.exportBurnSubtitlesTooltip") as string}
